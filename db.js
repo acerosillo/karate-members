@@ -1,18 +1,19 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
+const crypto = require('node:crypto');
 
 // Gup Rank Progression & Minimum Classes / Time Requirements
 const GUP_REQUIREMENTS = {
   '10th Gup (White Belt)': {
     shortRank: '10th Gup',
     beltName: 'White Belt',
-    nextRank: '9th Gup (White Belt with Black Band)',
+    nextRank: '9th Gup',
     minTimeWeeks: 6,
     minTimeMonths: 1.5,
     minClasses: 12,
     timeText: '6 weeks'
   },
-  '9th Gup (White Belt with Black Band)': {
+  '9th Gup (White Belt)': {
     shortRank: '9th Gup',
     beltName: 'White Belt (Black Band)',
     nextRank: '8th Gup (Orange Belt)',
@@ -190,6 +191,7 @@ function createDatabase(dbFilePath = path.join(__dirname, 'karate.db')) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       dob TEXT NOT NULL,
+      gender TEXT,
       address TEXT NOT NULL,
       tel TEXT NOT NULL,
       association_no TEXT NOT NULL,
@@ -239,10 +241,24 @@ function createDatabase(dbFilePath = path.join(__dirname, 'karate.db')) {
       UNIQUE(event_id, student_id)
     );
 
+    CREATE TABLE IF NOT EXISTS auth_config (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      username TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      password_salt TEXT NOT NULL,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
     CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(session_date);
     CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id);
     CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
   `);
+
+  // Migration: add gender column for databases created before this field existed
+  const studentColumns = db.prepare('PRAGMA table_info(students)').all();
+  if (!studentColumns.some(col => col.name === 'gender')) {
+    db.exec('ALTER TABLE students ADD COLUMN gender TEXT');
+  }
 
   return {
     rawDb: db,
@@ -306,14 +322,15 @@ function createDatabase(dbFilePath = path.join(__dirname, 'karate.db')) {
     createStudent(data) {
       const stmt = db.prepare(`
         INSERT INTO students (
-          name, dob, address, tel, association_no,
+          name, dob, gender, address, tel, association_no,
           membership_start, membership_end, rank,
           last_graded, due_testing, notes, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
       const result = stmt.run(
         data.name || '',
         data.dob || '',
+        data.gender || null,
         data.address || '',
         data.tel || '',
         data.association_no || '',
@@ -333,6 +350,7 @@ function createDatabase(dbFilePath = path.join(__dirname, 'karate.db')) {
         UPDATE students SET
           name = ?,
           dob = ?,
+          gender = ?,
           address = ?,
           tel = ?,
           association_no = ?,
@@ -348,6 +366,7 @@ function createDatabase(dbFilePath = path.join(__dirname, 'karate.db')) {
       stmt.run(
         data.name || '',
         data.dob || '',
+        data.gender || null,
         data.address || '',
         data.tel || '',
         data.association_no || '',
@@ -751,8 +770,62 @@ function createDatabase(dbFilePath = path.join(__dirname, 'karate.db')) {
         current_month: currentMonth,
         monthly_lessons_attended: monthlyLessonsAttended
       };
+    },
+
+    // ==========================================
+    // LOGIN / AUTH
+    // ==========================================
+    getAuthConfig() {
+      return db.prepare('SELECT username, password_hash, password_salt FROM auth_config WHERE id = 1').get() || null;
+    },
+
+    isAuthConfigured() {
+      return !!this.getAuthConfig();
+    },
+
+    setupAuth(username, password) {
+      const salt = crypto.randomBytes(16).toString('hex');
+      const hash = hashPassword(password, salt);
+      db.prepare(`
+        INSERT INTO auth_config (id, username, password_hash, password_salt)
+        VALUES (1, ?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET
+          username = excluded.username,
+          password_hash = excluded.password_hash,
+          password_salt = excluded.password_salt,
+          updated_at = CURRENT_TIMESTAMP
+      `).run(username, hash, salt);
+      return true;
+    },
+
+    verifyCredentials(username, password) {
+      const cfg = this.getAuthConfig();
+      if (!cfg || !username || !password) return false;
+      if (cfg.username !== username) return false;
+      const candidateHash = Buffer.from(hashPassword(password, cfg.password_salt), 'hex');
+      const storedHash = Buffer.from(cfg.password_hash, 'hex');
+      if (candidateHash.length !== storedHash.length) return false;
+      return crypto.timingSafeEqual(candidateHash, storedHash);
+    },
+
+    changePassword(currentPassword, newPassword) {
+      const cfg = this.getAuthConfig();
+      if (!cfg) return { success: false, message: 'Login has not been set up yet' };
+      if (!this.verifyCredentials(cfg.username, currentPassword)) {
+        return { success: false, message: 'Current password is incorrect' };
+      }
+      const salt = crypto.randomBytes(16).toString('hex');
+      const hash = hashPassword(newPassword, salt);
+      db.prepare(`
+        UPDATE auth_config SET password_hash = ?, password_salt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1
+      `).run(hash, salt);
+      return { success: true };
     }
   };
+}
+
+function hashPassword(password, salt) {
+  return crypto.scryptSync(password, salt, 64).toString('hex');
 }
 
 module.exports = { createDatabase, GUP_REQUIREMENTS, getRankRequirements, evaluateEligibility };

@@ -187,12 +187,20 @@ function showToast(message, type = 'info') {
 // INITIALIZATION
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
+  initAuthForms();
+  checkAuthAndInit();
+});
+
+function initApp() {
   initNavigation();
   initRegisterTab();
   initStudentsTab();
   initMonthlyTab();
   initEventsTab();
-  
+
+  document.getElementById('btn-logout').addEventListener('click', handleLogout);
+  document.getElementById('btn-change-password').addEventListener('click', handleChangePassword);
+
   // Set default dates and schedule
   const today = new Date().toISOString().slice(0, 10);
   document.getElementById('reg-date').value = today;
@@ -208,7 +216,129 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStudents();
   loadMissedAlerts();
   loadEvents();
-});
+}
+
+// ==========================================
+// LOGIN / AUTH
+// ==========================================
+async function checkAuthAndInit() {
+  try {
+    const res = await fetch(`${API_BASE}/auth/status`);
+    const data = await res.json();
+    if (!data.configured) {
+      showAuthOverlay('setup');
+    } else if (!data.authenticated) {
+      showAuthOverlay('login');
+    } else {
+      hideAuthOverlay();
+      initApp();
+    }
+  } catch (err) {
+    console.error('Auth check failed:', err);
+    showAuthOverlay('login');
+  }
+}
+
+function showAuthOverlay(mode) {
+  document.getElementById('auth-overlay').style.display = 'flex';
+  document.getElementById('auth-login-form').style.display = mode === 'login' ? 'block' : 'none';
+  document.getElementById('auth-setup-form').style.display = mode === 'setup' ? 'block' : 'none';
+  document.getElementById('auth-modal-title').textContent = mode === 'setup' ? '🔒 Set Up Canning Town TSD Login' : '🔒 Canning Town TSD Login';
+  const errorBox = document.getElementById('auth-error');
+  errorBox.style.display = 'none';
+  errorBox.textContent = '';
+}
+
+function hideAuthOverlay() {
+  document.getElementById('auth-overlay').style.display = 'none';
+}
+
+function showAuthError(message) {
+  const errorBox = document.getElementById('auth-error');
+  errorBox.textContent = message;
+  errorBox.style.display = 'block';
+}
+
+function initAuthForms() {
+  document.getElementById('auth-login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('auth-login-username').value.trim();
+    const password = document.getElementById('auth-login-password').value;
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Login failed');
+      hideAuthOverlay();
+      initApp();
+    } catch (err) {
+      showAuthError(err.message);
+    }
+  });
+
+  document.getElementById('auth-setup-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const username = document.getElementById('auth-setup-username').value.trim();
+    const password = document.getElementById('auth-setup-password').value;
+    const passwordConfirm = document.getElementById('auth-setup-password-confirm').value;
+
+    if (password.length < 6) return showAuthError('Password must be at least 6 characters.');
+    if (password !== passwordConfirm) return showAuthError('Passwords do not match.');
+
+    try {
+      const res = await fetch(`${API_BASE}/auth/setup`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Setup failed');
+      hideAuthOverlay();
+      initApp();
+    } catch (err) {
+      showAuthError(err.message);
+    }
+  });
+}
+
+async function handleLogout() {
+  try {
+    await fetch(`${API_BASE}/auth/logout`, { method: 'POST' });
+  } catch (err) {
+    console.error('Logout error:', err);
+  }
+  window.location.reload();
+}
+
+async function handleChangePassword() {
+  const currentPassword = prompt('Enter your current password:');
+  if (currentPassword === null) return;
+
+  const newPassword = prompt('Enter a new password (min 6 characters):');
+  if (newPassword === null) return;
+  if (newPassword.length < 6) return showToast('New password must be at least 6 characters.', 'danger');
+
+  const confirmPassword = prompt('Confirm new password:');
+  if (confirmPassword === null) return;
+  if (newPassword !== confirmPassword) return showToast('Passwords do not match.', 'danger');
+
+  try {
+    const res = await fetch(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to change password');
+    showToast('Password changed successfully!', 'success');
+  } catch (err) {
+    showToast(err.message, 'danger');
+  }
+}
 
 // ==========================================
 // NAVIGATION & STATS
@@ -337,7 +467,7 @@ function initRegisterTab() {
     state.register.students.forEach(item => {
       if (item.attendance_status === 'present') {
         item.paid = 1;
-        if (!item.amount_paid || item.amount_paid === 0) item.amount_paid = 8.0;
+        if (!item.amount_paid || item.amount_paid === 0) item.amount_paid = 10.0;
         if (!item.payment_method) item.payment_method = 'Cash';
       }
     });
@@ -355,7 +485,7 @@ function initRegisterTab() {
 
 async function loadRegister() {
   const tbody = document.getElementById('register-tbody');
-  tbody.innerHTML = '<tr><td colspan="10" class="text-center loading-cell">Loading class register...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="8" class="text-center loading-cell">Loading class register...</td></tr>';
 
   try {
     const res = await fetch(`${API_BASE}/register?date=${state.register.date}&class_name=${encodeURIComponent(state.register.class_name)}`);
@@ -365,7 +495,7 @@ async function loadRegister() {
     updateRegisterPills();
   } catch (err) {
     console.error('Failed to load register:', err);
-    tbody.innerHTML = '<tr><td colspan="10" class="text-center" style="color: var(--color-absent);">Failed to load register.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="color: var(--color-absent);">Failed to load register.</td></tr>';
   }
 }
 
@@ -394,7 +524,7 @@ function renderRegisterTable() {
   });
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="10" class="text-center loading-cell">No students match the current filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="8" class="text-center loading-cell">No students match the current filters.</td></tr>';
     return;
   }
 
@@ -445,19 +575,8 @@ function renderRegisterTable() {
       <td>
         <select class="form-control form-control-sm reg-payment-method" data-student-id="${item.student_id}" ${item.attendance_status !== 'present' ? 'disabled' : ''} style="width: 110px; font-size: 0.8rem; padding: 0.3rem 0.5rem;">
           <option value="Cash" ${item.payment_method === 'Cash' ? 'selected' : ''}>Cash</option>
-          <option value="Card" ${item.payment_method === 'Card' ? 'selected' : ''}>Card</option>
           <option value="Bank Transfer" ${item.payment_method === 'Bank Transfer' ? 'selected' : ''}>Transfer</option>
-          <option value="Monthly Sub" ${item.payment_method === 'Monthly Sub' ? 'selected' : ''}>Subscription</option>
         </select>
-      </td>
-      <td>
-        <input type="number" step="1" min="0" class="form-control form-control-sm reg-fee" data-student-id="${item.student_id}" 
-          value="${item.amount_paid !== undefined ? item.amount_paid : (item.paid ? 8.0 : 0.0)}" 
-          ${item.attendance_status !== 'present' ? 'disabled' : ''} style="width: 75px; font-size: 0.8rem; padding: 0.3rem 0.5rem;">
-      </td>
-      <td>
-        <input type="text" class="form-control form-control-sm reg-notes" data-student-id="${item.student_id}" 
-          value="${escapeHTML(item.attendance_notes || '')}" placeholder="Note..." style="font-size: 0.8rem; padding: 0.3rem 0.5rem;">
       </td>
     `;
 
@@ -474,7 +593,7 @@ function renderRegisterTable() {
         item.attendance_status = newStatus;
         if (newStatus === 'present' && (item.paid === undefined || item.paid === 0)) {
           // default unpaid unless set
-          if (!item.amount_paid) item.amount_paid = 8.0;
+          if (!item.amount_paid) item.amount_paid = 10.0;
           if (!item.payment_method) item.payment_method = 'Cash';
         }
         renderRegisterTable();
@@ -490,7 +609,7 @@ function renderRegisterTable() {
       if (item && item.attendance_status === 'present') {
         item.paid = item.paid ? 0 : 1;
         if (item.paid && (!item.amount_paid || item.amount_paid === 0)) {
-          item.amount_paid = 8.0;
+          item.amount_paid = 10.0;
         }
         if (!item.payment_method) item.payment_method = 'Cash';
         renderRegisterTable();
@@ -507,22 +626,6 @@ function renderRegisterTable() {
     });
   });
 
-  tbody.querySelectorAll('.reg-fee').forEach(input => {
-    input.addEventListener('change', (e) => {
-      const studentId = parseInt(input.getAttribute('data-student-id'), 10);
-      const item = state.register.students.find(s => s.student_id === studentId);
-      if (item) item.amount_paid = parseFloat(e.target.value) || 0;
-      updateRegisterPills();
-    });
-  });
-
-  tbody.querySelectorAll('.reg-notes').forEach(input => {
-    input.addEventListener('change', (e) => {
-      const studentId = parseInt(input.getAttribute('data-student-id'), 10);
-      const item = state.register.students.find(s => s.student_id === studentId);
-      if (item) item.attendance_notes = e.target.value;
-    });
-  });
 }
 
 function updateRegisterPills() {
@@ -659,8 +762,9 @@ function renderStudentsGrid() {
         <div class="student-name-group">
           <h3>${escapeHTML(student.name)}</h3>
           <div class="student-meta-assoc">
-            <span>🥋 Lic: ${escapeHTML(student.association_no || 'None')}</span>
-            <span>• Age: ${age || 'N/A'}</span>
+            <span>🥋 Assoc: ${escapeHTML(student.association_no || 'None')}</span>
+            <span>Age: ${age || 'N/A'}</span>
+            <span>Sex: ${student.gender ? `<span>${student.gender === 'm' ? 'Male' : student.gender === 'f' ? 'Female' : escapeHTML(student.gender)}</span>` : ''}</span>
           </div>
         </div>
         <span class="belt-badge ${beltClass}">
@@ -742,8 +846,8 @@ function renderStudentsGrid() {
           <button class="btn btn-outline btn-sm" onclick="editStudent(${student.id})">
             <span>✏️</span> Edit
           </button>
-          <button class="btn btn-danger btn-sm" onclick="deleteStudent(${student.id}, '${escapeHTML(student.name)}')">
-            <span>🗑️</span>
+          <button class="btn btn-danger btn-sm" onclick="deleteStudent(${student.id}, '${escapeHTML(student.name)}', '${student.status}')" title="${student.status === 'archived' ? 'Permanently delete this member' : 'Archive this member'}">
+            <span>🗑️</span>${student.status === 'archived' ? ' Delete Permanently' : ''}
           </button>
         </div>
       </div>
@@ -760,6 +864,7 @@ function openStudentModal(student = null) {
   document.getElementById('student-id').value = student ? student.id : '';
   document.getElementById('student-name').value = student ? student.name : '';
   document.getElementById('student-dob').value = student ? student.dob : '';
+  document.getElementById('student-gender').value = student ? (student.gender || '') : '';
   document.getElementById('student-tel').value = student ? student.tel : '';
   document.getElementById('student-assoc').value = student ? student.association_no : '';
   document.getElementById('student-address').value = student ? student.address : '';
@@ -792,6 +897,7 @@ async function handleStudentFormSubmit(e) {
   const payload = {
     name: document.getElementById('student-name').value.trim(),
     dob: document.getElementById('student-dob').value,
+    gender: document.getElementById('student-gender').value,
     tel: document.getElementById('student-tel').value.trim(),
     association_no: document.getElementById('student-assoc').value.trim(),
     address: document.getElementById('student-address').value.trim(),
@@ -849,14 +955,22 @@ async function editStudent(id) {
   }
 }
 
-async function deleteStudent(id, name) {
-  const confirmArchive = confirm(`Are you sure you want to remove/archive "${name}"?\n\nTheir training history will be preserved.`);
-  if (!confirmArchive) return;
+async function deleteStudent(id, name, status) {
+  const isArchived = status === 'archived';
+
+  if (isArchived) {
+    const confirmPermanent = confirm(`"${name}" is already archived.\n\nPermanently delete this member? This CANNOT be undone and will erase their attendance and payment history too.`);
+    if (!confirmPermanent) return;
+  } else {
+    const confirmArchive = confirm(`Are you sure you want to remove/archive "${name}"?\n\nTheir training history will be preserved.`);
+    if (!confirmArchive) return;
+  }
 
   try {
-    const res = await fetch(`${API_BASE}/students/${id}`, { method: 'DELETE' });
+    const url = isArchived ? `${API_BASE}/students/${id}?permanent=true` : `${API_BASE}/students/${id}`;
+    const res = await fetch(url, { method: 'DELETE' });
     if (!res.ok) throw new Error('Failed to delete student');
-    showToast(`Member "${name}" archived.`, 'warning');
+    showToast(isArchived ? `Member "${name}" permanently deleted.` : `Member "${name}" archived.`, 'warning');
     loadDashboardStats();
     loadStudents();
     loadRegister();
@@ -1094,7 +1208,7 @@ async function loadUnpaidSessions() {
         <td><a href="tel:${escapeHTML(item.tel)}" style="color: var(--color-info);">${escapeHTML(item.tel)}</a></td>
         <td>
           <button class="btn btn-success btn-sm" onclick="markSingleSessionPaid(${item.attendance_id}, '${escapeHTML(item.student_name)}')">
-            💳 Mark Paid (£8.00)
+            💳 Mark Paid (£10.00)
           </button>
         </td>
       `;
@@ -1120,7 +1234,7 @@ async function markSingleSessionPaid(attendanceId, studentName) {
         status: 'present',
         paid: 1,
         payment_method: 'Cash',
-        amount_paid: 8.0,
+        amount_paid: 10.0,
         notes: 'Paid via fee tracker'
       })
     });

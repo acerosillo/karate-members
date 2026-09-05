@@ -63,6 +63,8 @@
       </div>
 
       <div class="header-actions">
+        <button class="btn btn-outline btn-sm" id="btn-change-password" title="Change your login password">🔑 Change Password</button>
+        <button class="btn btn-outline btn-sm" id="btn-logout" title="Log out">🔓 Log Out</button>
         <button class="btn btn-primary" id="btn-quick-add-student">
           <span class="btn-icon">+</span> Register Member
         </button>
@@ -97,7 +99,7 @@
         <div class="schedule-banner-left">
           <span class="schedule-icon">🥋</span>
           <div>
-            <strong>Official Dojo Training Schedule:</strong>
+            <strong>Training Schedule:</strong>
             <span class="schedule-times">Every <strong>Tuesday (7:00 PM – 8:00 PM)</strong> &amp; Every <strong>Saturday
                 (11:30 AM – 12:30 PM)</strong></span>
           </div>
@@ -166,13 +168,11 @@
               <th>Attendance Status</th>
               <th>Class Payment</th>
               <th>Payment Method</th>
-              <th>Fee (£)</th>
-              <th>Session Notes</th>
             </tr>
           </thead>
           <tbody id="register-tbody">
             <tr>
-              <td colspan="10" class="text-center loading-cell">Loading class register...</td>
+              <td colspan="8" class="text-center loading-cell">Loading class register...</td>
             </tr>
           </tbody>
         </table>
@@ -192,7 +192,7 @@
             <select id="filter-rank" class="form-control">
               <option value="all">All Belt Ranks</option>
               <option value="10th Gup (White Belt)">10th Gup (White Belt)</option>
-              <option value="9th Gup (White Belt with Black Band)">9th Gup (White Belt with Black Band)</option>
+              <option value="9th Gup (White Belt)">9th Gup (White Belt)</option>
               <option value="8th Gup (Orange Belt)">8th Gup (Orange Belt)</option>
               <option value="7th Gup (Orange Tag Belt)">7th Gup (Orange Tag Belt)</option>
               <option value="6th Gup (Green Belt)">6th Gup (Green Belt)</option>
@@ -393,6 +393,54 @@
   </div>
 
   <!-- ==========================================
+       MODAL: LOGIN / FIRST-RUN SETUP
+       ========================================== -->
+  <div class="modal-overlay" id="auth-overlay" style="display: none; z-index: 9999;">
+    <div class="modal-container" style="max-width: 420px;">
+      <div class="modal-header">
+        <h3 id="auth-modal-title">🔒 Canning Town TSD Login</h3>
+      </div>
+      <div style="padding: 1.5rem;">
+        <div id="auth-error" style="display:none; color: var(--color-absent); margin-bottom: 1rem; font-size: 0.85rem;">
+        </div>
+
+        <form id="auth-login-form" class="modal-form" style="display:none;">
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label for="auth-login-username">Username</label>
+            <input type="text" id="auth-login-username" required class="form-control" autocomplete="username">
+          </div>
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label for="auth-login-password">Password</label>
+            <input type="password" id="auth-login-password" required class="form-control"
+              autocomplete="current-password">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;">Log In</button>
+        </form>
+
+        <form id="auth-setup-form" class="modal-form" style="display:none;">
+          <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem;">No login has been set up yet.
+            Choose a username and password to secure this dojo app.</p>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label for="auth-setup-username">Username</label>
+            <input type="text" id="auth-setup-username" required class="form-control" autocomplete="username">
+          </div>
+          <div class="form-group" style="margin-bottom: 1rem;">
+            <label for="auth-setup-password">Password (min 6 characters)</label>
+            <input type="password" id="auth-setup-password" required minlength="6" class="form-control"
+              autocomplete="new-password">
+          </div>
+          <div class="form-group" style="margin-bottom: 1.25rem;">
+            <label for="auth-setup-password-confirm">Confirm Password</label>
+            <input type="password" id="auth-setup-password-confirm" required minlength="6" class="form-control"
+              autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn btn-primary" style="width:100%;">Create Login</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
        MODAL: ADD / EDIT STUDENT
        ========================================== -->
   <div class="modal-overlay" id="student-modal" style="display: none;">
@@ -416,13 +464,21 @@
         </div>
 
         <div class="form-row">
-          <div class="form-group col-6">
+          <div class="form-group col-4">
             <label for="student-tel">Telephone Number <span class="required">*</span></label>
             <input type="tel" id="student-tel" required placeholder="e.g. 07700 900123" class="form-control">
           </div>
-          <div class="form-group col-6">
+          <div class="form-group col-4">
             <label for="student-assoc">Association / License No. <span class="required">*</span></label>
             <input type="text" id="student-assoc" required placeholder="e.g. EKF-2026-001" class="form-control">
+          </div>
+          <div class="form-group col-4">
+            <label for="student-gender">Gender</label>
+            <select id="student-gender" class="form-control">
+              <option value="">Not specified</option>
+              <option value="m">Male</option>
+              <option value="f">Female</option>
+            </select>
           </div>
         </div>
 
@@ -447,16 +503,16 @@
           <div class="form-group col-4">
             <label for="student-rank">Current Karate Rank <span class="required">*</span></label>
             <select id="student-rank" required class="form-control">
-              <option value="10th Gup (White Belt)">10th Gup (White Belt)</option>
-              <option value="9th Gup (White Belt with Black Band)">9th Gup (White Belt with Black Band)</option>
-              <option value="8th Gup (Orange Belt)">8th Gup (Orange Belt)</option>
-              <option value="7th Gup (Orange Tag Belt)">7th Gup (Orange Tag Belt)</option>
-              <option value="6th Gup (Green Belt)">6th Gup (Green Belt)</option>
-              <option value="5th Gup (Green Tag Belt)">5th Gup (Green Tag Belt)</option>
-              <option value="4th Gup (Brown Belt)">4th Gup (Brown Belt)</option>
-              <option value="3rd Gup (Brown Tag Belt)">3rd Gup (Brown Tag Belt)</option>
+              <option value="10th Gup (White Belt)">10th Gup (White)</option>
+              <option value="9th Gup (White Belt)">9th Gup (White Tag)</option>
+              <option value="8th Gup (Orange Belt)">8th Gup (Orange)</option>
+              <option value="7th Gup (Orange Tag Belt)">7th Gup (Orange Tag)</option>
+              <option value="6th Gup (Green Belt)">6th Gup (Green)</option>
+              <option value="5th Gup (Green Tag Belt)">5th Gup (Green Tag)</option>
+              <option value="4th Gup (Brown Belt)">4th Gup (Brown)</option>
+              <option value="3rd Gup (Brown Tag Belt)">3rd Gup (Brown Tag)</option>
               <option value="2nd Gup (Red Belt)">2nd Gup (Red Belt)</option>
-              <option value="1st Gup (Red Tag Belt)">1st Gup (Red Tag Belt)</option>
+              <option value="1st Gup (Red Tag Belt)">1st Gup (Red Tag)</option>
               <option value="Cho Dan Bo (Blue Belt - Black Belt Candidate)">Cho Dan Bo (Blue Belt - Black Belt
                 Candidate)</option>
               <option value="1st Dan (Black Belt)">1st Dan (Black Belt)</option>

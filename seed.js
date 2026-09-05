@@ -12,148 +12,7 @@ const db = createDatabase(dbPath);
 
 console.log('Seeding Karate Dojo database...');
 
-const studentsData = [
-  {
-    name: 'Marcus Vance',
-    dob: '1996-03-14',
-    address: '42 High Street, Birmingham, B1 2AA',
-    tel: '07700 900123',
-    association_no: 'EKF-2024-8841',
-    membership_start: '2024-01-10',
-    membership_end: '2026-12-31',
-    rank: '1st Dan (Black Belt)',
-    last_graded: '2025-06-15',
-    due_testing: '2027-06-20',
-    notes: 'Squad kata competitor. Assistant coach for juniors.',
-    status: 'active'
-  },
-  {
-    name: 'Sarah Jenkins',
-    dob: '2001-07-22',
-    address: '15 Maple Avenue, Solihull, B91 3QR',
-    tel: '07700 900456',
-    association_no: 'EKF-2024-9102',
-    membership_start: '2024-03-01',
-    membership_end: '2026-11-30',
-    rank: '3rd Gup (Brown Tag Belt)',
-    last_graded: '2026-05-15',
-    due_testing: '2026-09-26', // Due for 2nd Gup (Red Belt)!
-    notes: 'Eligible for 2nd Gup testing this month. Great Bassai Dai.',
-    status: 'active'
-  },
-  {
-    name: 'Liam O’Connor',
-    dob: '2008-11-05',
-    address: '88 Oakridge Road, Sutton Coldfield, B73 5XY',
-    tel: '07700 900789',
-    association_no: 'EKF-2025-3319',
-    membership_start: '2025-02-01',
-    membership_end: '2027-02-01',
-    rank: '8th Gup (Orange Belt)',
-    last_graded: '2025-11-10',
-    due_testing: '2026-10-15',
-    notes: 'Parent reported exam commitments. Flagged for follow-up.',
-    status: 'active'
-  },
-  {
-    name: 'Emily Chen',
-    dob: '2004-09-18',
-    address: '34 Victoria Lane, Harborne, B17 9PB',
-    tel: '07700 900321',
-    association_no: 'EKF-2024-6552',
-    membership_start: '2024-05-15',
-    membership_end: '2026-12-31',
-    rank: '5th Gup (Green Tag Belt)',
-    last_graded: '2026-04-12',
-    due_testing: '2026-10-15',
-    notes: 'Strong kumite footwork. Regular attendee.',
-    status: 'active'
-  },
-  {
-    name: 'Nathan Patel',
-    dob: '2010-02-08',
-    address: '19 Chestnut Grove, Edgbaston, B15 2TH',
-    tel: '07700 900654',
-    association_no: 'EKF-2026-1044',
-    membership_start: '2026-06-01',
-    membership_end: '2027-06-01',
-    rank: '10th Gup (White Belt)',
-    last_graded: null,
-    due_testing: '2026-09-26', // Due for 9th Gup White Belt with Black Band
-    notes: 'New beginner showing great progress in basic drills.',
-    status: 'active'
-  },
-  {
-    name: 'Tyler Brooks',
-    dob: '2006-12-30',
-    address: '7 Kingsway Park, Shirley, B90 4EG',
-    tel: '07700 900888',
-    association_no: 'EKF-2025-4421',
-    membership_start: '2025-01-15',
-    membership_end: '2026-10-15',
-    rank: '7th Gup (Orange Tag Belt)',
-    last_graded: '2026-01-20',
-    due_testing: '2026-10-01',
-    notes: 'Owes class fee for last Tuesday training.',
-    status: 'active'
-  },
-  {
-    name: 'Olivia Taylor',
-    dob: '2007-04-15',
-    address: '61 Meadow Way, Moseley, B13 8DJ',
-    tel: '07700 900999',
-    association_no: 'EKF-2025-7723',
-    membership_start: '2025-03-01',
-    membership_end: '2027-03-01',
-    rank: '9th Gup (White Belt with Black Band)',
-    last_graded: '2026-05-10',
-    due_testing: '2026-09-26',
-    notes: 'Missed multiple sessions during summer break.',
-    status: 'active'
-  },
-  {
-    name: 'David Miller',
-    dob: '1992-08-19',
-    address: '104 Church Road, Yardley, B25 8XE',
-    tel: '07700 900222',
-    association_no: 'EKF-2023-1109',
-    membership_start: '2023-09-01',
-    membership_end: '2026-12-31',
-    rank: 'Cho Dan Bo (Blue Belt - Black Belt Candidate)',
-    last_graded: '2025-11-20',
-    due_testing: '2026-09-26', // Due for Black Belt 1st Dan!
-    notes: 'Preparing for Shodan (1st Dan) examination.',
-    status: 'active'
-  },
-  {
-    name: 'Kenji Sato',
-    dob: '1985-05-12',
-    address: '5 The Firs, Coventry, CV3 4PL',
-    tel: '07700 900555',
-    association_no: 'EKF-2020-0012',
-    membership_start: '2020-01-01',
-    membership_end: '2028-12-31',
-    rank: '3rd Dan (Black Belt)',
-    last_graded: '2023-11-20',
-    due_testing: '2027-11-20',
-    notes: 'Senior Sandan practitioner and referee.',
-    status: 'active'
-  },
-  {
-    name: 'Chloe Davies',
-    dob: '2009-06-14',
-    address: '22 Blossom Drive, Hall Green, B28 9LM',
-    tel: '07700 900333',
-    association_no: 'EKF-2025-8812',
-    membership_start: '2025-04-10',
-    membership_end: '2027-04-10',
-    rank: '6th Gup (Green Belt)',
-    last_graded: '2026-03-22',
-    due_testing: '2026-11-15',
-    notes: 'Active junior member, excellent attendance.',
-    status: 'active'
-  }
-];
+const studentsData = [];
 
 const insertedStudents = [];
 for (const s of studentsData) {
@@ -184,15 +43,7 @@ const sessions = [
 console.log('Generating realistic attendance and payment records for Tuesdays & Saturdays...');
 
 // 1. Regular Attendees (Marcus Vance, Sarah Jenkins, David Miller, Kenji Sato, Chloe Davies, Emily Chen)
-const regularStudents = [
-  findStudent('Marcus Vance'),
-  findStudent('Sarah Jenkins'),
-  findStudent('David Miller'),
-  findStudent('Kenji Sato'),
-  findStudent('Chloe Davies'),
-  findStudent('Emily Chen'),
-  findStudent('Nathan Patel')
-];
+const regularStudents = [];
 
 for (const student of regularStudents) {
   sessions.forEach((sess, index) => {
@@ -334,16 +185,11 @@ console.log(`Created ${insertedEvents.length} events.`);
 // Register participants for events
 // Register Sarah Jenkins and Nathan Patel for Gup Grading
 const gupGrading = insertedEvents[0];
-db.addEventParticipant(gupGrading.id, findStudent('Sarah Jenkins').id, 'registered', 'Testing for 2nd Gup (Red Belt)');
-db.addEventParticipant(gupGrading.id, findStudent('Nathan Patel').id, 'registered', 'Testing for 9th Gup (White Belt with Black Band)');
 
 // Register David Miller for Black Belt Dan Testing
 const danGrading = insertedEvents[1];
-db.addEventParticipant(danGrading.id, findStudent('David Miller').id, 'registered', 'Testing for 1st Dan (Black Belt)');
 
 // Register Marcus Vance & Emily Chen for National Championship
 const comp = insertedEvents[2];
-db.addEventParticipant(comp.id, findStudent('Marcus Vance').id, 'registered', 'Senior Male Kata & Kumite -75kg');
-db.addEventParticipant(comp.id, findStudent('Emily Chen').id, 'registered', 'Junior Female Kumite -55kg');
 
 console.log('Seeding completed successfully!');

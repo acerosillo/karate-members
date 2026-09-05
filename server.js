@@ -2,6 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 const url = require('node:url');
+const crypto = require('node:crypto');
 const { createDatabase } = require('./db.js');
 
 const PORT = process.env.PORT || 3000;
@@ -31,6 +32,59 @@ function sendJSON(res, data, statusCode = 200) {
 
 function sendError(res, message = 'Internal Server Error', statusCode = 500) {
   sendJSON(res, { error: message }, statusCode);
+}
+
+// ==========================================
+// LOGIN SESSIONS (in-memory, cookie-based)
+// ==========================================
+const SESSION_COOKIE_NAME = 'dojo_session';
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24h server-side safety-net expiry
+const sessions = new Map(); // token -> { createdAt }
+
+function createSession() {
+  const token = crypto.randomBytes(32).toString('hex');
+  sessions.set(token, { createdAt: Date.now() });
+  return token;
+}
+
+function isValidSession(token) {
+  if (!token) return false;
+  const session = sessions.get(token);
+  if (!session) return false;
+  if (Date.now() - session.createdAt > SESSION_MAX_AGE_MS) {
+    sessions.delete(token);
+    return false;
+  }
+  return true;
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie;
+  const cookies = {};
+  if (!header) return cookies;
+  header.split(';').forEach(pair => {
+    const idx = pair.indexOf('=');
+    if (idx === -1) return;
+    const key = pair.slice(0, idx).trim();
+    const val = pair.slice(idx + 1).trim();
+    cookies[key] = decodeURIComponent(val);
+  });
+  return cookies;
+}
+
+function isHttpsRequest(req) {
+  return Boolean(req.socket && req.socket.encrypted) || req.headers['x-forwarded-proto'] === 'https';
+}
+
+// Session cookie only (no Max-Age/Expires) so it clears when the browser closes.
+function setSessionCookie(req, res, token) {
+  const secureFlag = isHttpsRequest(req) ? ' Secure;' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=${token}; HttpOnly; SameSite=Lax; Path=/;${secureFlag}`);
+}
+
+function clearSessionCookie(req, res) {
+  const secureFlag = isHttpsRequest(req) ? ' Secure;' : '';
+  res.setHeader('Set-Cookie', `${SESSION_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0;${secureFlag}`);
 }
 
 function parseBody(req) {
@@ -82,6 +136,83 @@ const server = http.createServer(async (req, res) => {
     // API ROUTES
     // ==========================================
     if (pathname.startsWith('/api/')) {
+
+      // ------------------------------------------
+      // AUTH ROUTES (not gated by the login check below)
+      // ------------------------------------------
+
+      // GET /api/auth/status
+      if (pathname === '/api/auth/status' && method === 'GET') {
+        const cookies = parseCookies(req);
+        return sendJSON(res, {
+          configured: db.isAuthConfigured(),
+          authenticated: isValidSession(cookies[SESSION_COOKIE_NAME])
+        });
+      }
+
+      // POST /api/auth/setup (first-run only — creates the single dojo login)
+      if (pathname === '/api/auth/setup' && method === 'POST') {
+        if (db.isAuthConfigured()) {
+          return sendError(res, 'Login has already been set up', 400);
+        }
+        const body = await parseBody(req);
+        const username = (body.username || '').trim();
+        if (!username || !body.password || body.password.length < 6) {
+          return sendError(res, 'Username and a password of at least 6 characters are required', 400);
+        }
+        db.setupAuth(username, body.password);
+        const token = createSession();
+        setSessionCookie(req, res, token);
+        return sendJSON(res, { success: true });
+      }
+
+      // POST /api/auth/login
+      if (pathname === '/api/auth/login' && method === 'POST') {
+        if (!db.isAuthConfigured()) {
+          return sendError(res, 'Login has not been set up yet', 400);
+        }
+        const body = await parseBody(req);
+        const username = (body.username || '').trim();
+        if (!db.verifyCredentials(username, body.password || '')) {
+          return sendError(res, 'Invalid username or password', 401);
+        }
+        const token = createSession();
+        setSessionCookie(req, res, token);
+        return sendJSON(res, { success: true });
+      }
+
+      // POST /api/auth/logout
+      if (pathname === '/api/auth/logout' && method === 'POST') {
+        const cookies = parseCookies(req);
+        if (cookies[SESSION_COOKIE_NAME]) sessions.delete(cookies[SESSION_COOKIE_NAME]);
+        clearSessionCookie(req, res);
+        return sendJSON(res, { success: true });
+      }
+
+      // POST /api/auth/change-password
+      if (pathname === '/api/auth/change-password' && method === 'POST') {
+        const cookies = parseCookies(req);
+        if (!isValidSession(cookies[SESSION_COOKIE_NAME])) {
+          return sendError(res, 'Unauthorized', 401);
+        }
+        const body = await parseBody(req);
+        if (!body.currentPassword || !body.newPassword || body.newPassword.length < 6) {
+          return sendError(res, 'Current password and a new password (min 6 characters) are required', 400);
+        }
+        const result = db.changePassword(body.currentPassword, body.newPassword);
+        if (!result.success) return sendError(res, result.message, 400);
+        return sendJSON(res, { success: true });
+      }
+
+      // ------------------------------------------
+      // LOGIN GATE — every other /api/* route requires a valid session
+      // ------------------------------------------
+      if (!pathname.startsWith('/api/auth/')) {
+        const cookies = parseCookies(req);
+        if (!isValidSession(cookies[SESSION_COOKIE_NAME])) {
+          return sendError(res, 'Unauthorized — please log in', 401);
+        }
+      }
 
       // GET /api/stats
       if (pathname === '/api/stats' && method === 'GET') {
@@ -279,9 +410,9 @@ const server = http.createServer(async (req, res) => {
         if (type === 'students') {
           const students = db.getStudents({ status: 'all' });
           csvContent = [
-            ['ID', 'Name', 'DOB', 'Tel', 'Address', 'Association Number', 'Rank', 'Membership Start', 'Membership End', 'Last Graded', 'Due Testing', 'Status', 'Total Attended', 'Total Missed'].map(escapeCSV).join(','),
+            ['ID', 'Name', 'DOB', 'Gender', 'Tel', 'Address', 'Association Number', 'Rank', 'Membership Start', 'Membership End', 'Last Graded', 'Due Testing', 'Status', 'Total Attended', 'Total Missed'].map(escapeCSV).join(','),
             ...students.map(s => [
-              s.id, s.name, s.dob, s.tel, s.address, s.association_no, s.rank, s.membership_start, s.membership_end, s.last_graded || '', s.due_testing || '', s.status, s.total_attended, s.total_missed
+              s.id, s.name, s.dob, s.gender || '', s.tel, s.address, s.association_no, s.rank, s.membership_start, s.membership_end, s.last_graded || '', s.due_testing || '', s.status, s.total_attended, s.total_missed
             ].map(escapeCSV).join(','))
           ].join('\r\n');
         } else if (type === 'monthly') {
