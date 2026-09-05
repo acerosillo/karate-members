@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Karate Dojo Member & Register Manager</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Serif+JP:wght@600;900&display=swap"
+    rel="stylesheet">
+</head>
+
+<body>
+  <div class="app-container">
+    <!-- TOP HEADER -->
+    <header class="app-header">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <img src="/images/gblogo.webp" width="60" alt="Canning Town TSD">
+        </div>
+        <div class="brand-titles">
+          <div class="brand-sub">MASTER ROSILLO REGISTER 2026</div>
+          <h1 class="brand-name">CANNING TOWN TSD</h1>
+        </div>
+      </div>
+
+      <!-- KPI METRIC CHIPS -->
+      <div class="header-metrics">
+        <div class="metric-chip" id="chip-active-students" title="Total Active Dojo Members">
+          <span class="metric-icon">🥋</span>
+          <div class="metric-info">
+            <span class="metric-val" id="kpi-total-students">0</span>
+            <span class="metric-label">Active Members</span>
+          </div>
+        </div>
+
+        <div class="metric-chip chip-alert" id="chip-missed-alert" title="Students with >5 Missed Lessons">
+          <span class="metric-icon">⚠️</span>
+          <div class="metric-info">
+            <span class="metric-val" id="kpi-missed-alerts">0</span>
+            <span class="metric-label">Missed >5 Lessons</span>
+          </div>
+        </div>
+
+        <div class="metric-chip chip-warning" id="chip-unpaid-alert" title="Sessions Trained But Not Yet Paid">
+          <span class="metric-icon">💳</span>
+          <div class="metric-info">
+            <span class="metric-val" id="kpi-unpaid-sessions">0</span>
+            <span class="metric-label">Unpaid Classes</span>
+          </div>
+        </div>
+
+        <div class="metric-chip chip-events" id="chip-upcoming-events" title="Upcoming Karate Gradings & Competitions">
+          <span class="metric-icon">🏆</span>
+          <div class="metric-info">
+            <span class="metric-val" id="kpi-upcoming-events">0</span>
+            <span class="metric-label">Upcoming Events</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button class="btn btn-primary" id="btn-quick-add-student">
+          <span class="btn-icon">+</span> Register Member
+        </button>
+      </div>
+    </header>
+
+    <!-- NAVIGATION TABS -->
+    <nav class="nav-tabs">
+      <button class="tab-btn active" data-tab="register">
+        <span class="tab-icon">📋</span> Daily Register & Fees
+      </button>
+      <button class="tab-btn" data-tab="students">
+        <span class="tab-icon">👥</span> Student Directory
+      </button>
+      <button class="tab-btn" data-tab="monthly">
+        <span class="tab-icon">📊</span> Monthly Attendance & Missed Alerts
+        <span class="badge-count" id="nav-missed-badge" style="display: none;">0</span>
+      </button>
+      <button class="tab-btn" data-tab="events">
+        <span class="tab-icon">🏆</span> Gradings & Events
+        <span class="badge-count count-blue" id="nav-events-badge">0</span>
+      </button>
+      <button class="tab-btn" data-tab="export">
+        <span class="tab-icon">💾</span> Reports & Backup
+      </button>
+    </nav>
+
+    <!-- TAB 1: DAILY REGISTER & TRAINING FEES -->
+    <section class="tab-content active" id="tab-register">
+      <!-- SCHEDULE ANNOUNCEMENT BANNER -->
+      <div class="schedule-banner">
+        <div class="schedule-banner-left">
+          <span class="schedule-icon">🥋</span>
+          <div>
+            <strong>Official Dojo Training Schedule:</strong>
+            <span class="schedule-times">Every <strong>Tuesday (7:00 PM – 8:00 PM)</strong> &amp; Every <strong>Saturday
+                (11:30 AM – 12:30 PM)</strong></span>
+          </div>
+        </div>
+        <div class="schedule-quick-btns">
+          <button type="button" class="btn btn-outline btn-sm" id="btn-quick-tuesday">🗓️ Next Tuesday</button>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-quick-saturday">🗓️ Next Saturday</button>
+        </div>
+      </div>
+
+      <div class="view-header">
+        <div class="session-selector-bar">
+          <div class="selector-group">
+            <label for="reg-date">Training Date:</label>
+            <input type="date" id="reg-date" class="form-control">
+            <span id="reg-day-badge" class="pill pill-present" style="font-size: 0.78rem;">Tuesday</span>
+          </div>
+          <div class="selector-group">
+            <label for="reg-class">Class Session:</label>
+            <select id="reg-class" class="form-control">
+              <option value="Tuesday Class (7:00 PM - 8:00 PM)">Tuesday Class (7:00 PM - 8:00 PM)</option>
+              <option value="Saturday Class (11:30 AM - 12:30 PM)">Saturday Class (11:30 AM - 12:30 PM)</option>
+              <option value="Special Squad / Seminar Session">Special Squad / Seminar Session</option>
+            </select>
+          </div>
+          <button class="btn btn-outline" id="btn-today">Today</button>
+        </div>
+
+        <div class="view-toolbar">
+          <div class="quick-stats-pills">
+            <span class="pill pill-present"><strong id="reg-count-present">0</strong> Present</span>
+            <span class="pill pill-absent"><strong id="reg-count-absent">0</strong> Absent</span>
+            <span class="pill pill-unpaid"><strong id="reg-count-unpaid">0</strong> Unpaid</span>
+            <span class="pill pill-revenue">Collected: £<strong id="reg-count-collected">0</strong></span>
+          </div>
+          <div class="toolbar-actions">
+            <button class="btn btn-outline" id="btn-mark-all-present">Mark All Present</button>
+            <button class="btn btn-outline" id="btn-mark-all-paid">Mark All Paid</button>
+            <button class="btn btn-success" id="btn-save-register">
+              <span>💾</span> Save Register
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Register Filter and Search -->
+      <div class="sub-filter-bar">
+        <input type="text" id="reg-search" placeholder="Search student by name or belt..."
+          class="form-control filter-search">
+        <div class="filter-toggles">
+          <label><input type="checkbox" id="reg-filter-unpaid"> Show Unpaid Only</label>
+          <label><input type="checkbox" id="reg-filter-missed"> Show Missed >5 Lessons</label>
+        </div>
+      </div>
+
+      <!-- Roster Register Table -->
+      <div class="table-container">
+        <table class="data-table" id="register-table">
+          <thead>
+            <tr>
+              <th width="50">#</th>
+              <th>Student Member</th>
+              <th>Rank & Belt</th>
+              <th>Association No.</th>
+              <th>This Month</th>
+              <th>Attendance Status</th>
+              <th>Class Payment</th>
+              <th>Payment Method</th>
+              <th>Fee (£)</th>
+              <th>Session Notes</th>
+            </tr>
+          </thead>
+          <tbody id="register-tbody">
+            <tr>
+              <td colspan="10" class="text-center loading-cell">Loading class register...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 2: STUDENTS DIRECTORY -->
+    <section class="tab-content" id="tab-students">
+      <div class="view-header">
+        <div class="search-filter-row">
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="student-search" placeholder="Search name, phone, address, association number..."
+              class="form-control">
+          </div>
+          <div class="filter-group">
+            <select id="filter-rank" class="form-control">
+              <option value="all">All Belt Ranks</option>
+              <option value="10th Gup (White Belt)">10th Gup (White Belt)</option>
+              <option value="9th Gup (White Belt with Black Band)">9th Gup (White Belt with Black Band)</option>
+              <option value="8th Gup (Orange Belt)">8th Gup (Orange Belt)</option>
+              <option value="7th Gup (Orange Tag Belt)">7th Gup (Orange Tag Belt)</option>
+              <option value="6th Gup (Green Belt)">6th Gup (Green Belt)</option>
+              <option value="5th Gup (Green Tag Belt)">5th Gup (Green Tag Belt)</option>
+              <option value="4th Gup (Brown Belt)">4th Gup (Brown Belt)</option>
+              <option value="3rd Gup (Brown Tag Belt)">3rd Gup (Brown Tag Belt)</option>
+              <option value="2nd Gup (Red Belt)">2nd Gup (Red Belt)</option>
+              <option value="1st Gup (Red Tag Belt)">1st Gup (Red Tag Belt)</option>
+              <option value="Cho Dan Bo (Blue Belt - Black Belt Candidate)">Cho Dan Bo (Blue Belt - Black Belt
+                Candidate)</option>
+              <option value="1st Dan (Black Belt)">1st Dan (Black Belt)</option>
+              <option value="2nd Dan (Black Belt)">2nd Dan (Black Belt)</option>
+              <option value="3rd Dan (Black Belt)">3rd Dan (Black Belt)</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <select id="filter-status" class="form-control">
+              <option value="active">Active Members</option>
+              <option value="archived">Archived Members</option>
+              <option value="all">All Records</option>
+            </select>
+          </div>
+          <button class="btn btn-primary" id="btn-add-student">
+            <span>+</span> Add New Student
+          </button>
+        </div>
+      </div>
+
+      <!-- Students Grid Cards -->
+      <div class="students-grid" id="students-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 3: MONTHLY ATTENDANCE & MISSED >5 LESSONS -->
+    <section class="tab-content" id="tab-monthly">
+      <!-- MISSED LESSONS ALERT WATCHLIST -->
+      <div class="alert-section-card">
+        <div class="alert-section-header">
+          <div class="alert-title-wrap">
+            <span class="alert-badge-icon">⚠️</span>
+            <div>
+              <h2>Missed >5 Lessons Attendance Watchlist</h2>
+              <p class="section-desc">Students highlighted below have missed 5 or more classes. Reach out to verify
+                their training schedule or wellbeing.</p>
+            </div>
+          </div>
+          <div class="alert-total-pill" id="missed-total-pill">0 Students Flagged</div>
+        </div>
+
+        <div class="missed-cards-container" id="missed-cards-container">
+          <!-- Dynamically populated -->
+        </div>
+      </div>
+
+      <!-- UNPAID TRAINING FEES SUMMARY -->
+      <div class="card summary-panel" style="margin-top: 1.5rem;">
+        <div class="panel-header">
+          <div>
+            <h3>⚠️ Unpaid Training Fee Tracker</h3>
+            <p class="panel-desc">Students who attended training sessions but have pending class fees.</p>
+          </div>
+          <button class="btn btn-outline btn-sm" id="btn-refresh-unpaid">Refresh List</button>
+        </div>
+        <div class="table-container">
+          <table class="data-table" id="unpaid-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Student</th>
+                <th>Rank</th>
+                <th>Class Session</th>
+                <th>Telephone</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="unpaid-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- MONTHLY ATTENDANCE TABLE -->
+      <div class="card" style="margin-top: 1.5rem;">
+        <div class="panel-header">
+          <div>
+            <h3>📅 Monthly Lesson Attendance Register</h3>
+            <p class="panel-desc">Cumulative lesson counts and fees per student by month.</p>
+          </div>
+          <div class="header-tools">
+            <input type="month" id="monthly-filter-month" class="form-control">
+            <button class="btn btn-outline" id="btn-export-monthly-csv">📥 Export Monthly CSV</button>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <table class="data-table" id="monthly-table">
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Rank</th>
+                <th>Association No.</th>
+                <th>Month</th>
+                <th>Attended Lessons</th>
+                <th>Paid Lessons</th>
+                <th>Unpaid Lessons</th>
+                <th>Total Paid</th>
+                <th>Attendance Rating</th>
+              </tr>
+            </thead>
+            <tbody id="monthly-tbody">
+              <!-- Rendered dynamically -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: EVENTS & GRADING REMINDERS -->
+    <section class="tab-content" id="tab-events">
+      <div class="view-header">
+        <div>
+          <h2>🥋 Karate Gradings, Competitions & Seminars</h2>
+          <p class="section-desc">Manage upcoming belt tests, tournament squad registrations, and eligibility reminders.
+          </p>
+        </div>
+        <button class="btn btn-primary" id="btn-add-event">
+          <span>+</span> Create New Event
+        </button>
+      </div>
+
+      <!-- GRADING CANDIDATES REMINDER BANNER -->
+      <div class="candidates-banner-card">
+        <div class="candidates-header">
+          <div class="banner-title">
+            <span class="banner-icon">🥋</span>
+            <div>
+              <h3>Grading & Belt Testing Due Reminders</h3>
+              <p>Students whose next testing date is due or approaching:</p>
+            </div>
+          </div>
+        </div>
+        <div class="candidates-grid" id="candidates-grid">
+          <!-- Rendered dynamically -->
+        </div>
+      </div>
+
+      <!-- EVENTS LIST -->
+      <div class="events-grid" id="events-grid">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+    <!-- TAB 5: REPORTS & BACKUP -->
+    <section class="tab-content" id="tab-export">
+      <div class="view-header">
+        <div>
+          <h2>💾 Reports, CSV Exports & Dojo Backup</h2>
+          <p class="section-desc">Download complete records for offline record-keeping, association audits, and
+            printable sheets.</p>
+        </div>
+      </div>
+
+      <div class="export-cards-grid">
+        <div class="export-card">
+          <div class="export-icon">👥</div>
+          <h3>Student Members Roster</h3>
+          <p>Export all registered students with DOB, contact details, association license numbers, belt ranks, and
+            membership dates.</p>
+          <a href="/api/export/csv?type=students" download class="btn btn-outline">📥 Download Students CSV</a>
+        </div>
+
+        <div class="export-card">
+          <div class="export-icon">📊</div>
+          <h3>Monthly Attendance Report</h3>
+          <p>Export monthly training sessions attended by student, including total fees collected and attendance rates.
+          </p>
+          <a href="/api/export/csv?type=monthly" download class="btn btn-outline">📥 Download Monthly Attendance CSV</a>
+        </div>
+
+        <div class="export-card">
+          <div class="export-icon">⚠️</div>
+          <h3>Missed Lessons Audit</h3>
+          <p>Download audit list of students who have missed >5 lessons, including consecutive absences and telephone
+            numbers.</p>
+          <a href="/api/export/csv?type=missed" download class="btn btn-outline">📥 Download Missed Lessons CSV</a>
+        </div>
+
+        <div class="export-card">
+          <div class="export-icon">🖨️</div>
+          <h3>Print Daily Attendance Sheet</h3>
+          <p>Generate a clean, print-friendly register sheet for clipboard use on the dojo mat.</p>
+          <button class="btn btn-primary" onclick="window.print()">🖨️ Print Current View</button>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ==========================================
+       MODAL: ADD / EDIT STUDENT
+       ========================================== -->
+  <div class="modal-overlay" id="student-modal" style="display: none;">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 id="student-modal-title">Register New Karate Member</h3>
+        <button class="modal-close" id="btn-close-student-modal">&times;</button>
+      </div>
+      <form id="student-form" class="modal-form">
+        <input type="hidden" id="student-id">
+
+        <div class="form-row">
+          <div class="form-group col-8">
+            <label for="student-name">Full Name <span class="required">*</span></label>
+            <input type="text" id="student-name" required placeholder="e.g. John Doe" class="form-control">
+          </div>
+          <div class="form-group col-4">
+            <label for="student-dob">Date of Birth <span class="required">*</span></label>
+            <input type="date" id="student-dob" required class="form-control">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label for="student-tel">Telephone Number <span class="required">*</span></label>
+            <input type="tel" id="student-tel" required placeholder="e.g. 07700 900123" class="form-control">
+          </div>
+          <div class="form-group col-6">
+            <label for="student-assoc">Association / License No. <span class="required">*</span></label>
+            <input type="text" id="student-assoc" required placeholder="e.g. EKF-2026-001" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="student-address">Home Address <span class="required">*</span></label>
+          <input type="text" id="student-address" required placeholder="Street address, city, postcode"
+            class="form-control">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label for="student-mem-start">Membership Start Date <span class="required">*</span></label>
+            <input type="date" id="student-mem-start" required class="form-control">
+          </div>
+          <div class="form-group col-6">
+            <label for="student-mem-end">Membership Expiry Date <span class="required">*</span></label>
+            <input type="date" id="student-mem-end" required class="form-control">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-4">
+            <label for="student-rank">Current Karate Rank <span class="required">*</span></label>
+            <select id="student-rank" required class="form-control">
+              <option value="10th Gup (White Belt)">10th Gup (White Belt)</option>
+              <option value="9th Gup (White Belt with Black Band)">9th Gup (White Belt with Black Band)</option>
+              <option value="8th Gup (Orange Belt)">8th Gup (Orange Belt)</option>
+              <option value="7th Gup (Orange Tag Belt)">7th Gup (Orange Tag Belt)</option>
+              <option value="6th Gup (Green Belt)">6th Gup (Green Belt)</option>
+              <option value="5th Gup (Green Tag Belt)">5th Gup (Green Tag Belt)</option>
+              <option value="4th Gup (Brown Belt)">4th Gup (Brown Belt)</option>
+              <option value="3rd Gup (Brown Tag Belt)">3rd Gup (Brown Tag Belt)</option>
+              <option value="2nd Gup (Red Belt)">2nd Gup (Red Belt)</option>
+              <option value="1st Gup (Red Tag Belt)">1st Gup (Red Tag Belt)</option>
+              <option value="Cho Dan Bo (Blue Belt - Black Belt Candidate)">Cho Dan Bo (Blue Belt - Black Belt
+                Candidate)</option>
+              <option value="1st Dan (Black Belt)">1st Dan (Black Belt)</option>
+              <option value="2nd Dan (Black Belt)">2nd Dan (Black Belt)</option>
+              <option value="3rd Dan (Black Belt)">3rd Dan (Black Belt)</option>
+            </select>
+          </div>
+          <div class="form-group col-4">
+            <label for="student-last-graded">Last Graded Date</label>
+            <input type="date" id="student-last-graded" class="form-control">
+          </div>
+          <div class="form-group col-4">
+            <label for="student-due-testing">Next Testing Due Date</label>
+            <input type="date" id="student-due-testing" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-8">
+            <label for="student-notes">Instructor Notes</label>
+            <input type="text" id="student-notes" placeholder="Special requirements, kata focus, injuries..."
+              class="form-control">
+          </div>
+          <div class="form-group col-4">
+            <label for="student-status">Status</label>
+            <select id="student-status" class="form-control">
+              <option value="active">Active Member</option>
+              <option value="archived">Archived / Inactive</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="btn-cancel-student">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-student">Save Member</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: STUDENT DETAILS & ATTENDANCE HISTORY
+       ========================================== -->
+  <div class="modal-overlay" id="history-modal" style="display: none;">
+    <div class="modal-container modal-large">
+      <div class="modal-header">
+        <h3 id="history-modal-title">Student Profile & Training Record</h3>
+        <button class="modal-close" id="btn-close-history-modal">&times;</button>
+      </div>
+      <div class="modal-body" id="history-modal-body">
+        <!-- Rendered dynamically -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       MODAL: CREATE / EDIT EVENT
+       ========================================== -->
+  <div class="modal-overlay" id="event-modal" style="display: none;">
+    <div class="modal-container">
+      <div class="modal-header">
+        <h3 id="event-modal-title">Create Karate Event</h3>
+        <button class="modal-close" id="btn-close-event-modal">&times;</button>
+      </div>
+      <form id="event-form" class="modal-form">
+        <input type="hidden" id="event-id">
+
+        <div class="form-group">
+          <label for="event-title">Event Title <span class="required">*</span></label>
+          <input type="text" id="event-title" required placeholder="e.g. Winter Kyu Grading Examination"
+            class="form-control">
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label for="event-type">Event Type <span class="required">*</span></label>
+            <select id="event-type" required class="form-control">
+              <option value="grading">🥋 Karate Grading (Belt Test)</option>
+              <option value="competition">🏆 Tournament / Competition</option>
+              <option value="seminar">📚 Seminar / Masterclass</option>
+              <option value="other">📅 Other Club Event</option>
+            </select>
+          </div>
+          <div class="form-group col-6">
+            <label for="event-date">Date <span class="required">*</span></label>
+            <input type="date" id="event-date" required class="form-control">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group col-6">
+            <label for="event-time">Time</label>
+            <input type="text" id="event-time" placeholder="e.g. 10:00 - 14:00" class="form-control">
+          </div>
+          <div class="form-group col-6">
+            <label for="event-reminder">Reminder (Days Before)</label>
+            <input type="number" id="event-reminder" value="14" min="1" max="90" class="form-control">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="event-location">Location / Venue</label>
+          <input type="text" id="event-location" placeholder="e.g. Honbu Dojo, Birmingham" class="form-control">
+        </div>
+
+        <div class="form-group">
+          <label for="event-desc">Description & Requirements</label>
+          <textarea id="event-desc" rows="3" placeholder="Syllabus requirements, gear required, fees..."
+            class="form-control"></textarea>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline" id="btn-cancel-event">Cancel</button>
+          <button type="submit" class="btn btn-primary">Save Event</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <script src="app.js"></script>
+</body>
+
+</html>

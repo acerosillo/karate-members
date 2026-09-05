@@ -1,0 +1,758 @@
+const { DatabaseSync } = require('node:sqlite');
+const path = require('node:path');
+
+// Gup Rank Progression & Minimum Classes / Time Requirements
+const GUP_REQUIREMENTS = {
+  '10th Gup (White Belt)': {
+    shortRank: '10th Gup',
+    beltName: 'White Belt',
+    nextRank: '9th Gup (White Belt with Black Band)',
+    minTimeWeeks: 6,
+    minTimeMonths: 1.5,
+    minClasses: 12,
+    timeText: '6 weeks'
+  },
+  '9th Gup (White Belt with Black Band)': {
+    shortRank: '9th Gup',
+    beltName: 'White Belt (Black Band)',
+    nextRank: '8th Gup (Orange Belt)',
+    minTimeWeeks: 12,
+    minTimeMonths: 3,
+    minClasses: 24,
+    timeText: '3 months'
+  },
+  '8th Gup (Orange Belt)': {
+    shortRank: '8th Gup',
+    beltName: 'Orange Belt',
+    nextRank: '7th Gup (Orange Tag Belt)',
+    minTimeWeeks: 12,
+    minTimeMonths: 3,
+    minClasses: 24,
+    timeText: '3 months'
+  },
+  '7th Gup (Orange Tag Belt)': {
+    shortRank: '7th Gup',
+    beltName: 'Orange Tag Belt',
+    nextRank: '6th Gup (Green Belt)',
+    minTimeWeeks: 12,
+    minTimeMonths: 3,
+    minClasses: 24,
+    timeText: '3 months'
+  },
+  '6th Gup (Green Belt)': {
+    shortRank: '6th Gup',
+    beltName: 'Green Belt',
+    nextRank: '5th Gup (Green Tag Belt)',
+    minTimeWeeks: 12,
+    minTimeMonths: 3,
+    minClasses: 24,
+    timeText: '3 months'
+  },
+  '5th Gup (Green Tag Belt)': {
+    shortRank: '5th Gup',
+    beltName: 'Green Tag Belt',
+    nextRank: '4th Gup (Brown Belt)',
+    minTimeWeeks: 12,
+    minTimeMonths: 3,
+    minClasses: 24,
+    timeText: '3 months'
+  },
+  '4th Gup (Brown Belt)': {
+    shortRank: '4th Gup',
+    beltName: 'Brown Belt',
+    nextRank: '3rd Gup (Brown Tag Belt)',
+    minTimeWeeks: 12,
+    minTimeMonths: 3,
+    minClasses: 24,
+    timeText: '3 months'
+  },
+  '3rd Gup (Brown Tag Belt)': {
+    shortRank: '3rd Gup',
+    beltName: 'Brown Tag Belt',
+    nextRank: '2nd Gup (Red Belt)',
+    minTimeWeeks: 12,
+    minTimeMonths: 3,
+    minClasses: 24,
+    timeText: '3 months'
+  },
+  '2nd Gup (Red Belt)': {
+    shortRank: '2nd Gup',
+    beltName: 'Red Belt',
+    nextRank: '1st Gup (Red Tag Belt)',
+    minTimeWeeks: 24,
+    minTimeMonths: 6,
+    minClasses: 60,
+    timeText: '6 months'
+  },
+  '1st Gup (Red Tag Belt)': {
+    shortRank: '1st Gup',
+    beltName: 'Red Tag Belt',
+    nextRank: 'Cho Dan Bo (Blue Belt - Black Belt Candidate)',
+    minTimeWeeks: 24,
+    minTimeMonths: 6,
+    minClasses: 60,
+    timeText: '6 months'
+  },
+  'Cho Dan Bo (Blue Belt - Black Belt Candidate)': {
+    shortRank: 'Cho Dan Bo',
+    beltName: 'Blue Belt (Black Belt Candidate)',
+    nextRank: '1st Dan (Black Belt)',
+    minTimeWeeks: 24,
+    minTimeMonths: 6,
+    minClasses: 60,
+    timeText: '6 months'
+  }
+};
+
+function getRankRequirements(rankStr) {
+  if (!rankStr) return null;
+  const cleanRank = rankStr.toLowerCase();
+  for (const [key, req] of Object.entries(GUP_REQUIREMENTS)) {
+    if (cleanRank.includes(req.shortRank.toLowerCase())) {
+      return { currentRank: key, ...req };
+    }
+    if (cleanRank.includes('cho dan bo') && key.toLowerCase().includes('cho dan bo')) {
+      return { currentRank: key, ...req };
+    }
+  }
+  return null;
+}
+
+function evaluateEligibility(student) {
+  if (!student) return null;
+  const req = getRankRequirements(student.rank);
+  const lessonsDone = Number(student.lessons_since_last_graded) || 0;
+
+  const baseDateStr = student.last_graded || student.membership_start;
+  let weeksElapsed = 0;
+  let monthsElapsed = 0;
+  if (baseDateStr) {
+    const baseDate = new Date(baseDateStr);
+    const now = new Date();
+    const diffMs = Math.max(0, now - baseDate);
+    weeksElapsed = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 7));
+    monthsElapsed = Math.round((diffMs / (1000 * 60 * 60 * 24 * 30.4375)) * 10) / 10;
+  }
+
+  if (!req) {
+    return {
+      has_requirements: false,
+      current_rank: student.rank,
+      next_rank: null,
+      lessons_done: lessonsDone,
+      lessons_required: null,
+      classes_met: true,
+      time_met: true,
+      eligible: true,
+      summary: 'Senior Rank / Black Belt Dan Grade'
+    };
+  }
+
+  const classesMet = lessonsDone >= req.minClasses;
+  const timeMet = weeksElapsed >= req.minTimeWeeks;
+  const eligible = classesMet && timeMet;
+
+  const classesRemaining = Math.max(0, req.minClasses - lessonsDone);
+  const progressPercent = Math.min(100, Math.round((lessonsDone / req.minClasses) * 100));
+
+  return {
+    has_requirements: true,
+    current_rank: req.currentRank,
+    next_rank: req.nextRank,
+    belt_name: req.beltName,
+    lessons_done: lessonsDone,
+    lessons_required: req.minClasses,
+    classes_remaining: classesRemaining,
+    progress_percent: progressPercent,
+    classes_met: classesMet,
+    time_met: timeMet,
+    weeks_elapsed: weeksElapsed,
+    weeks_required: req.minTimeWeeks,
+    months_elapsed: monthsElapsed,
+    months_required: req.minTimeMonths,
+    time_text: req.timeText,
+    eligible: eligible,
+    summary: eligible
+      ? `Eligible for ${req.nextRank} (${lessonsDone}/${req.minClasses} classes, ${monthsElapsed}/${req.timeText})`
+      : `${lessonsDone}/${req.minClasses} classes (${classesRemaining} needed), ${monthsElapsed}/${req.timeText}`
+  };
+}
+
+function createDatabase(dbFilePath = path.join(__dirname, 'karate.db')) {
+  const db = new DatabaseSync(dbFilePath);
+
+  // Enable foreign keys
+  db.exec('PRAGMA foreign_keys = ON;');
+
+  // Schema creation
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS students (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      dob TEXT NOT NULL,
+      address TEXT NOT NULL,
+      tel TEXT NOT NULL,
+      association_no TEXT NOT NULL,
+      membership_start TEXT NOT NULL,
+      membership_end TEXT NOT NULL,
+      rank TEXT NOT NULL,
+      last_graded TEXT,
+      due_testing TEXT,
+      notes TEXT,
+      status TEXT DEFAULT 'active',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS attendance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+      session_date TEXT NOT NULL,
+      class_name TEXT NOT NULL DEFAULT 'Regular Class',
+      status TEXT NOT NULL DEFAULT 'present',
+      paid INTEGER NOT NULL DEFAULT 0,
+      payment_method TEXT,
+      amount_paid REAL DEFAULT 0.0,
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(student_id, session_date, class_name)
+    );
+
+    CREATE TABLE IF NOT EXISTS events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      event_date TEXT NOT NULL,
+      event_time TEXT,
+      location TEXT,
+      description TEXT,
+      reminder_days INTEGER DEFAULT 7,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS event_participants (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+      status TEXT DEFAULT 'registered',
+      notes TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(event_id, student_id)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(session_date);
+    CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id);
+    CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
+  `);
+
+  return {
+    rawDb: db,
+
+    // ==========================================
+    // STUDENTS
+    // ==========================================
+    getStudents({ search = '', rank = '', status = 'active' } = {}) {
+      let sql = `
+        SELECT s.*, 
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as total_attended,
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'absent') as total_missed,
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present' AND a.session_date >= COALESCE(s.last_graded, s.membership_start)) as lessons_since_last_graded,
+          (SELECT MAX(a.session_date) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as last_attended_date
+        FROM students s 
+        WHERE 1=1
+      `;
+      const params = [];
+
+      if (status && status !== 'all') {
+        sql += ' AND s.status = ?';
+        params.push(status);
+      }
+      if (rank && rank !== 'all') {
+        sql += ' AND s.rank = ?';
+        params.push(rank);
+      }
+      if (search && search.trim()) {
+        sql += ' AND (s.name LIKE ? OR s.association_no LIKE ? OR s.tel LIKE ? OR s.address LIKE ?)';
+        const queryTerm = `%${search.trim()}%`;
+        params.push(queryTerm, queryTerm, queryTerm, queryTerm);
+      }
+
+      sql += ' ORDER BY s.name ASC';
+      const stmt = db.prepare(sql);
+      const rows = stmt.all(...params);
+      return rows.map(r => ({
+        ...r,
+        eligibility: evaluateEligibility(r)
+      }));
+    },
+
+    getStudentById(id) {
+      const stmt = db.prepare(`
+        SELECT s.*,
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as total_attended,
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'absent') as total_missed,
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present' AND a.session_date >= COALESCE(s.last_graded, s.membership_start)) as lessons_since_last_graded,
+          (SELECT MAX(a.session_date) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as last_attended_date
+        FROM students s
+        WHERE s.id = ?
+      `);
+      const row = stmt.get(id);
+      if (!row) return null;
+      return {
+        ...row,
+        eligibility: evaluateEligibility(row)
+      };
+    },
+
+    createStudent(data) {
+      const stmt = db.prepare(`
+        INSERT INTO students (
+          name, dob, address, tel, association_no,
+          membership_start, membership_end, rank,
+          last_graded, due_testing, notes, status
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `);
+      const result = stmt.run(
+        data.name || '',
+        data.dob || '',
+        data.address || '',
+        data.tel || '',
+        data.association_no || '',
+        data.membership_start || '',
+        data.membership_end || '',
+        data.rank || '10th Kyu (White)',
+        data.last_graded || null,
+        data.due_testing || null,
+        data.notes || '',
+        data.status || 'active'
+      );
+      return this.getStudentById(result.lastInsertRowid);
+    },
+
+    updateStudent(id, data) {
+      const stmt = db.prepare(`
+        UPDATE students SET
+          name = ?,
+          dob = ?,
+          address = ?,
+          tel = ?,
+          association_no = ?,
+          membership_start = ?,
+          membership_end = ?,
+          rank = ?,
+          last_graded = ?,
+          due_testing = ?,
+          notes = ?,
+          status = ?
+        WHERE id = ?
+      `);
+      stmt.run(
+        data.name || '',
+        data.dob || '',
+        data.address || '',
+        data.tel || '',
+        data.association_no || '',
+        data.membership_start || '',
+        data.membership_end || '',
+        data.rank || '10th Kyu (White)',
+        data.last_graded || null,
+        data.due_testing || null,
+        data.notes || '',
+        data.status || 'active',
+        id
+      );
+      return this.getStudentById(id);
+    },
+
+    deleteStudent(id) {
+      const stmt = db.prepare('DELETE FROM students WHERE id = ?');
+      const res = stmt.run(id);
+      return res.changes > 0;
+    },
+
+    // ==========================================
+    // ATTENDANCE & REGISTER
+    // ==========================================
+    getRegisterForSession(sessionDate, className = 'Regular Class') {
+      const stmt = db.prepare(`
+        SELECT 
+          s.id as student_id,
+          s.name,
+          s.rank,
+          s.association_no,
+          s.tel,
+          s.status as student_status,
+          a.id as attendance_id,
+          a.session_date,
+          a.class_name,
+          COALESCE(a.status, 'unrecorded') as attendance_status,
+          COALESCE(a.paid, 0) as paid,
+          COALESCE(a.payment_method, '') as payment_method,
+          COALESCE(a.amount_paid, 0.0) as amount_paid,
+          COALESCE(a.notes, '') as attendance_notes,
+          (SELECT COUNT(*) FROM attendance att WHERE att.student_id = s.id AND att.status = 'absent') as total_missed,
+          (SELECT COUNT(*) FROM attendance att WHERE att.student_id = s.id AND att.status = 'present' AND strftime('%Y-%m', att.session_date) = strftime('%Y-%m', ?)) as current_month_lessons
+        FROM students s
+        LEFT JOIN attendance a ON s.id = a.student_id AND a.session_date = ? AND a.class_name = ?
+        WHERE s.status = 'active'
+        ORDER BY s.name ASC
+      `);
+      return stmt.all(sessionDate, sessionDate, className);
+    },
+
+    saveAttendanceRecord({ student_id, session_date, class_name = 'Regular Class', status = 'present', paid = 0, payment_method = null, amount_paid = 0.0, notes = '' }) {
+      const stmt = db.prepare(`
+        INSERT INTO attendance (student_id, session_date, class_name, status, paid, payment_method, amount_paid, notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(student_id, session_date, class_name) DO UPDATE SET
+          status = excluded.status,
+          paid = excluded.paid,
+          payment_method = excluded.payment_method,
+          amount_paid = excluded.amount_paid,
+          notes = excluded.notes
+      `);
+      stmt.run(
+        student_id,
+        session_date,
+        class_name,
+        status,
+        paid ? 1 : 0,
+        payment_method,
+        Number(amount_paid) || 0.0,
+        notes
+      );
+      return this.getAttendanceRecord(student_id, session_date, class_name);
+    },
+
+    getAttendanceRecord(student_id, session_date, class_name = 'Regular Class') {
+      const stmt = db.prepare(`
+        SELECT * FROM attendance 
+        WHERE student_id = ? AND session_date = ? AND class_name = ?
+      `);
+      return stmt.get(student_id, session_date, class_name);
+    },
+
+    saveBulkAttendance(session_date, class_name, records) {
+      const results = [];
+      for (const rec of records) {
+        if (!rec.student_id) continue;
+        const res = this.saveAttendanceRecord({
+          student_id: rec.student_id,
+          session_date,
+          class_name,
+          status: rec.status || 'present',
+          paid: rec.paid ? 1 : 0,
+          payment_method: rec.payment_method || null,
+          amount_paid: rec.amount_paid || 0,
+          notes: rec.notes || ''
+        });
+        results.push(res);
+      }
+      return results;
+    },
+
+    getStudentAttendanceHistory(student_id) {
+      const stmt = db.prepare(`
+        SELECT * FROM attendance
+        WHERE student_id = ?
+        ORDER BY session_date DESC, class_name ASC
+      `);
+      return stmt.all(student_id);
+    },
+
+    // ==========================================
+    // MONTHLY COUNTS & MISSED LESSONS (>5)
+    // ==========================================
+    getMonthlyLessonCounts(yearMonth = null) {
+      let sql = `
+        SELECT 
+          s.id as student_id,
+          s.name,
+          s.rank,
+          s.association_no,
+          s.tel,
+          strftime('%Y-%m', a.session_date) as month,
+          COUNT(*) as attended_lessons,
+          SUM(CASE WHEN a.paid = 1 THEN a.amount_paid ELSE 0 END) as total_paid,
+          SUM(CASE WHEN a.paid = 0 THEN 1 ELSE 0 END) as unpaid_lessons
+        FROM students s
+        JOIN attendance a ON s.id = a.student_id
+        WHERE a.status = 'present'
+      `;
+      const params = [];
+      if (yearMonth) {
+        sql += " AND strftime('%Y-%m', a.session_date) = ?";
+        params.push(yearMonth);
+      }
+      sql += `
+        GROUP BY s.id, month
+        ORDER BY month DESC, attended_lessons DESC, s.name ASC
+      `;
+      const stmt = db.prepare(sql);
+      return stmt.all(...params);
+    },
+
+    getStudentMonthlyBreakdown(student_id) {
+      const stmt = db.prepare(`
+        SELECT 
+          strftime('%Y-%m', session_date) as month,
+          COUNT(*) as attended_lessons,
+          SUM(CASE WHEN paid = 1 THEN 1 ELSE 0 END) as paid_lessons,
+          SUM(CASE WHEN paid = 0 THEN 1 ELSE 0 END) as unpaid_lessons,
+          SUM(amount_paid) as total_amount_paid
+        FROM attendance
+        WHERE student_id = ? AND status = 'present'
+        GROUP BY month
+        ORDER BY month DESC
+      `);
+      return stmt.all(student_id);
+    },
+
+    getMissedLessonsReport() {
+      // Highlights students who have missed >5 lessons
+      // Checks:
+      // 1. Total missed lessons in database >= 5
+      // 2. Consecutive recent missed lessons
+      const activeStudents = db.prepare(`
+        SELECT s.*,
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as total_attended,
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'absent') as total_missed,
+          (SELECT MAX(a.session_date) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as last_attended_date
+        FROM students s
+        WHERE s.status = 'active'
+        ORDER BY total_missed DESC, s.name ASC
+      `).all();
+
+      return activeStudents.map(student => {
+        // Calculate recent streak of missed classes
+        const recentRecords = db.prepare(`
+          SELECT status, session_date
+          FROM attendance
+          WHERE student_id = ?
+          ORDER BY session_date DESC
+          LIMIT 10
+        `).all(student.id);
+
+        let consecutiveMissed = 0;
+        for (const r of recentRecords) {
+          if (r.status === 'absent') {
+            consecutiveMissed++;
+          } else if (r.status === 'present') {
+            break;
+          }
+        }
+
+        const isAlert = student.total_missed >= 5 || consecutiveMissed >= 5;
+
+        return {
+          ...student,
+          consecutive_missed: consecutiveMissed,
+          is_missed_alert: isAlert, // Highlight if missed > 5 lessons
+          recent_records: recentRecords
+        };
+      });
+    },
+
+    getUnpaidTrainedSessions() {
+      const stmt = db.prepare(`
+        SELECT 
+          a.id as attendance_id,
+          a.session_date,
+          a.class_name,
+          a.paid,
+          a.amount_paid,
+          a.payment_method,
+          s.id as student_id,
+          s.name as student_name,
+          s.rank,
+          s.tel
+        FROM attendance a
+        JOIN students s ON a.student_id = s.id
+        WHERE a.status = 'present' AND a.paid = 0
+        ORDER BY a.session_date DESC, s.name ASC
+      `);
+      return stmt.all();
+    },
+
+    // ==========================================
+    // EVENTS & REMINDERS
+    // ==========================================
+    getEvents({ type = '', upcomingOnly = false } = {}) {
+      let sql = `
+        SELECT e.*,
+          (SELECT COUNT(*) FROM event_participants ep WHERE ep.event_id = e.id) as participant_count
+        FROM events e
+        WHERE 1=1
+      `;
+      const params = [];
+      if (type) {
+        sql += ' AND e.event_type = ?';
+        params.push(type);
+      }
+      if (upcomingOnly) {
+        sql += " AND e.event_date >= date('now', 'localtime')";
+      }
+      sql += ' ORDER BY e.event_date ASC';
+      const stmt = db.prepare(sql);
+      return stmt.all(...params);
+    },
+
+    getEventById(id) {
+      const stmt = db.prepare(`
+        SELECT e.*,
+          (SELECT COUNT(*) FROM event_participants ep WHERE ep.event_id = e.id) as participant_count
+        FROM events e
+        WHERE e.id = ?
+      `);
+      return stmt.get(id);
+    },
+
+    createEvent(data) {
+      const stmt = db.prepare(`
+        INSERT INTO events (title, event_type, event_date, event_time, location, description, reminder_days)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `);
+      const res = stmt.run(
+        data.title,
+        data.event_type || 'grading',
+        data.event_date,
+        data.event_time || '',
+        data.location || '',
+        data.description || '',
+        Number(data.reminder_days) || 7
+      );
+      return this.getEventById(res.lastInsertRowid);
+    },
+
+    updateEvent(id, data) {
+      const stmt = db.prepare(`
+        UPDATE events SET
+          title = ?,
+          event_type = ?,
+          event_date = ?,
+          event_time = ?,
+          location = ?,
+          description = ?,
+          reminder_days = ?
+        WHERE id = ?
+      `);
+      stmt.run(
+        data.title,
+        data.event_type || 'grading',
+        data.event_date,
+        data.event_time || '',
+        data.location || '',
+        data.description || '',
+        Number(data.reminder_days) || 7,
+        id
+      );
+      return this.getEventById(id);
+    },
+
+    deleteEvent(id) {
+      const stmt = db.prepare('DELETE FROM events WHERE id = ?');
+      const res = stmt.run(id);
+      return res.changes > 0;
+    },
+
+    getEventParticipants(eventId) {
+      const stmt = db.prepare(`
+        SELECT 
+          ep.id as participant_id,
+          ep.status as participant_status,
+          ep.notes as participant_notes,
+          s.id as student_id,
+          s.name,
+          s.rank,
+          s.last_graded,
+          s.due_testing,
+          s.tel
+        FROM event_participants ep
+        JOIN students s ON ep.student_id = s.id
+        WHERE ep.event_id = ?
+        ORDER BY s.name ASC
+      `);
+      return stmt.all(eventId);
+    },
+
+    addEventParticipant(eventId, studentId, status = 'registered', notes = '') {
+      const stmt = db.prepare(`
+        INSERT INTO event_participants (event_id, student_id, status, notes)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(event_id, student_id) DO UPDATE SET
+          status = excluded.status,
+          notes = excluded.notes
+      `);
+      stmt.run(eventId, studentId, status, notes);
+      return true;
+    },
+
+    removeEventParticipant(eventId, studentId) {
+      const stmt = db.prepare('DELETE FROM event_participants WHERE event_id = ? AND student_id = ?');
+      const res = stmt.run(eventId, studentId);
+      return res.changes > 0;
+    },
+
+    getGradingCandidates(targetDate = null) {
+      // Find students whose due_testing is around the targetDate or within 45 days
+      let sql = `
+        SELECT s.*,
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as total_attended,
+          (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present' AND a.session_date >= COALESCE(s.last_graded, s.membership_start)) as lessons_since_last_graded
+        FROM students s
+        WHERE s.status = 'active'
+      `;
+      const params = [];
+      if (targetDate) {
+        sql += " AND (s.due_testing <= ? OR s.due_testing IS NULL OR s.due_testing <= date(?, '+30 days'))";
+        params.push(targetDate, targetDate);
+      } else {
+        sql += " AND s.due_testing IS NOT NULL AND s.due_testing <= date('now', '+30 days')";
+      }
+      sql += ' ORDER BY s.due_testing ASC, s.rank ASC';
+      const stmt = db.prepare(sql);
+      const rows = stmt.all(...params);
+      return rows.map(r => ({
+        ...r,
+        eligibility: evaluateEligibility(r)
+      }));
+    },
+
+    // ==========================================
+    // STATS & DASHBOARD OVERVIEW
+    // ==========================================
+    getDashboardStats() {
+      const totalStudents = db.prepare("SELECT COUNT(*) as count FROM students WHERE status = 'active'").get().count;
+      const missedAlertsCount = this.getMissedLessonsReport().filter(s => s.is_missed_alert).length;
+      
+      const unpaidSessions = db.prepare(`
+        SELECT COUNT(*) as count, COALESCE(SUM(amount_paid), 0) as total_amount
+        FROM attendance
+        WHERE status = 'present' AND paid = 0
+      `).get();
+
+      const upcomingEvents = db.prepare(`
+        SELECT COUNT(*) as count
+        FROM events
+        WHERE event_date >= date('now', 'localtime')
+      `).get().count;
+
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const monthlyLessonsAttended = db.prepare(`
+        SELECT COUNT(*) as count
+        FROM attendance
+        WHERE status = 'present' AND strftime('%Y-%m', session_date) = ?
+      `).get(currentMonth).count;
+
+      return {
+        total_students: totalStudents,
+        missed_alerts_count: missedAlertsCount,
+        unpaid_count: unpaidSessions.count,
+        upcoming_events_count: upcomingEvents,
+        current_month: currentMonth,
+        monthly_lessons_attended: monthlyLessonsAttended
+      };
+    }
+  };
+}
+
+module.exports = { createDatabase, GUP_REQUIREMENTS, getRankRequirements, evaluateEligibility };
