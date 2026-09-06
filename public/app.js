@@ -349,12 +349,37 @@ function initNavigation() {
     btn.addEventListener('click', () => {
       const target = btn.getAttribute('data-tab');
       switchTab(target);
+      closeHeaderMenu();
     });
   });
 
   document.getElementById('btn-quick-add-student').addEventListener('click', () => {
     openStudentModal();
   });
+
+  initHeaderMenu();
+}
+
+function initHeaderMenu() {
+  const burger = document.getElementById('btn-header-burger');
+  const panel = document.getElementById('header-collapsible');
+
+  burger.addEventListener('click', () => {
+    const isOpen = panel.classList.toggle('is-open');
+    burger.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  });
+
+  // Auto-close the mobile menu once the viewport grows past the burger-menu breakpoint
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 1024) closeHeaderMenu();
+  });
+}
+
+function closeHeaderMenu() {
+  const burger = document.getElementById('btn-header-burger');
+  const panel = document.getElementById('header-collapsible');
+  panel.classList.remove('is-open');
+  burger.setAttribute('aria-expanded', 'false');
 }
 
 function switchTab(tabId) {
@@ -485,7 +510,7 @@ function initRegisterTab() {
 
 async function loadRegister() {
   const tbody = document.getElementById('register-tbody');
-  tbody.innerHTML = '<tr><td colspan="8" class="text-center loading-cell">Loading class register...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" class="text-center loading-cell">Loading class register...</td></tr>';
 
   try {
     const res = await fetch(`${API_BASE}/register?date=${state.register.date}&class_name=${encodeURIComponent(state.register.class_name)}`);
@@ -495,7 +520,7 @@ async function loadRegister() {
     updateRegisterPills();
   } catch (err) {
     console.error('Failed to load register:', err);
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center" style="color: var(--color-absent);">Failed to load register.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center" style="color: var(--color-absent);">Failed to load register.</td></tr>';
   }
 }
 
@@ -524,7 +549,7 @@ function renderRegisterTable() {
   });
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="8" class="text-center loading-cell">No students match the current filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center loading-cell">No students match the current filters.</td></tr>';
     return;
   }
 
@@ -567,16 +592,10 @@ function renderRegisterTable() {
         </div>
       </td>
       <td>
-        <button type="button" class="payment-btn ${item.attendance_status !== 'present' ? 'is-disabled' : item.paid ? 'is-paid' : 'is-unpaid'}" 
+        <button type="button" class="payment-btn ${item.attendance_status !== 'present' ? 'is-disabled' : item.paid ? 'is-paid' : 'is-unpaid'}"
           data-student-id="${item.student_id}" ${item.attendance_status !== 'present' ? 'disabled' : ''}>
           ${item.attendance_status !== 'present' ? '—' : item.paid ? '✓ Paid' : '⚠️ Unpaid'}
         </button>
-      </td>
-      <td>
-        <select class="form-control form-control-sm reg-payment-method" data-student-id="${item.student_id}" ${item.attendance_status !== 'present' ? 'disabled' : ''} style="width: 110px; font-size: 0.8rem; padding: 0.3rem 0.5rem;">
-          <option value="Cash" ${item.payment_method === 'Cash' ? 'selected' : ''}>Cash</option>
-          <option value="Bank Transfer" ${item.payment_method === 'Bank Transfer' ? 'selected' : ''}>Transfer</option>
-        </select>
       </td>
     `;
 
@@ -615,14 +634,6 @@ function renderRegisterTable() {
         renderRegisterTable();
         updateRegisterPills();
       }
-    });
-  });
-
-  tbody.querySelectorAll('.reg-payment-method').forEach(sel => {
-    sel.addEventListener('change', (e) => {
-      const studentId = parseInt(sel.getAttribute('data-student-id'), 10);
-      const item = state.register.students.find(s => s.student_id === studentId);
-      if (item) item.payment_method = e.target.value;
     });
   });
 
@@ -764,7 +775,7 @@ function renderStudentsGrid() {
           <div class="student-meta-assoc">
             <span>🥋 Assoc: ${escapeHTML(student.association_no || 'None')}</span>
             <span>Age: ${age || 'N/A'}</span>
-            <span>Sex: ${student.gender ? `<span>${student.gender === 'm' ? 'Male' : student.gender === 'f' ? 'Female' : escapeHTML(student.gender)}</span>` : ''}</span>
+            <span>Sex: ${student.gender ? `<span>${student.gender === 'm' ? 'M' : student.gender === 'f' ? 'F' : escapeHTML(student.gender)}</span>` : ''}</span>
           </div>
         </div>
         <span class="belt-badge ${beltClass}">

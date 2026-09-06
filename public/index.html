@@ -27,47 +27,57 @@
         </div>
       </div>
 
-      <!-- KPI METRIC CHIPS -->
-      <div class="header-metrics">
-        <div class="metric-chip" id="chip-active-students" title="Total Active Dojo Members">
-          <span class="metric-icon">🥋</span>
-          <div class="metric-info">
-            <span class="metric-val" id="kpi-total-students">0</span>
-            <span class="metric-label">Active Members</span>
+      <!-- Mobile/Tablet Menu Toggle -->
+      <button class="header-burger" id="btn-header-burger" aria-label="Toggle menu" aria-expanded="false"
+        aria-controls="header-collapsible">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+
+      <div class="header-collapsible" id="header-collapsible">
+        <!-- KPI METRIC CHIPS -->
+        <div class="header-metrics">
+          <div class="metric-chip" id="chip-active-students" title="Total Active Dojo Members">
+            <span class="metric-icon">🥋</span>
+            <div class="metric-info">
+              <span class="metric-val" id="kpi-total-students">0</span>
+              <span class="metric-label">Active Members</span>
+            </div>
+          </div>
+
+          <div class="metric-chip chip-alert" id="chip-missed-alert" title="Students with >5 Missed Lessons">
+            <span class="metric-icon">⚠️</span>
+            <div class="metric-info">
+              <span class="metric-val" id="kpi-missed-alerts">0</span>
+              <span class="metric-label">Missed >5 Lessons</span>
+            </div>
+          </div>
+
+          <div class="metric-chip chip-warning" id="chip-unpaid-alert" title="Sessions Trained But Not Yet Paid">
+            <span class="metric-icon">💳</span>
+            <div class="metric-info">
+              <span class="metric-val" id="kpi-unpaid-sessions">0</span>
+              <span class="metric-label">Unpaid Classes</span>
+            </div>
+          </div>
+
+          <div class="metric-chip chip-events" id="chip-upcoming-events" title="Upcoming Karate Gradings & Competitions">
+            <span class="metric-icon">🏆</span>
+            <div class="metric-info">
+              <span class="metric-val" id="kpi-upcoming-events">0</span>
+              <span class="metric-label">Upcoming Events</span>
+            </div>
           </div>
         </div>
 
-        <div class="metric-chip chip-alert" id="chip-missed-alert" title="Students with >5 Missed Lessons">
-          <span class="metric-icon">⚠️</span>
-          <div class="metric-info">
-            <span class="metric-val" id="kpi-missed-alerts">0</span>
-            <span class="metric-label">Missed >5 Lessons</span>
-          </div>
+        <div class="header-actions">
+          <button class="btn btn-outline" id="btn-change-password" title="Change your login password">🔑 Change Password</button>
+          <button class="btn btn-outline" id="btn-logout" title="Log out">🔓 Log Out</button>
+          <button class="btn btn-primary" id="btn-quick-add-student">
+            <span class="btn-icon">+</span> Register Member
+          </button>
         </div>
-
-        <div class="metric-chip chip-warning" id="chip-unpaid-alert" title="Sessions Trained But Not Yet Paid">
-          <span class="metric-icon">💳</span>
-          <div class="metric-info">
-            <span class="metric-val" id="kpi-unpaid-sessions">0</span>
-            <span class="metric-label">Unpaid Classes</span>
-          </div>
-        </div>
-
-        <div class="metric-chip chip-events" id="chip-upcoming-events" title="Upcoming Karate Gradings & Competitions">
-          <span class="metric-icon">🏆</span>
-          <div class="metric-info">
-            <span class="metric-val" id="kpi-upcoming-events">0</span>
-            <span class="metric-label">Upcoming Events</span>
-          </div>
-        </div>
-      </div>
-
-      <div class="header-actions">
-        <button class="btn btn-outline btn-sm" id="btn-change-password" title="Change your login password">🔑 Change Password</button>
-        <button class="btn btn-outline btn-sm" id="btn-logout" title="Log out">🔓 Log Out</button>
-        <button class="btn btn-primary" id="btn-quick-add-student">
-          <span class="btn-icon">+</span> Register Member
-        </button>
       </div>
     </header>
 
@@ -167,12 +177,11 @@
               <th>This Month</th>
               <th>Attendance Status</th>
               <th>Class Payment</th>
-              <th>Payment Method</th>
             </tr>
           </thead>
           <tbody id="register-tbody">
             <tr>
-              <td colspan="8" class="text-center loading-cell">Loading class register...</td>
+              <td colspan="7" class="text-center loading-cell">Loading class register...</td>
             </tr>
           </tbody>
         </table>

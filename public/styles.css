@@ -87,6 +87,53 @@ body {
   gap: 1rem;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+.header-collapsible {
+  display: contents;
+}
+
+.header-burger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+  width: 42px;
+  height: 42px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.header-burger span {
+  display: block;
+  width: 20px;
+  height: 2px;
+  background: var(--text-main);
+  border-radius: 2px;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.header-burger[aria-expanded="true"] span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.header-burger[aria-expanded="true"] span:nth-child(2) {
+  opacity: 0;
+}
+
+.header-burger[aria-expanded="true"] span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
 .brand-logo {
   width: 54px;
   height: 54px;
@@ -152,13 +199,13 @@ body {
 }
 
 .metric-val {
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 800;
   line-height: 1.2;
 }
 
 .metric-label {
-  font-size: 0.72rem;
+  font-size: 0.62rem;
   color: var(--text-muted);
   font-weight: 600;
   text-transform: uppercase;
@@ -432,6 +479,8 @@ select.form-control {
   display: flex;
   align-items: center;
   gap: 0.6rem;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .selector-group label {
@@ -439,6 +488,13 @@ select.form-control {
   font-weight: 600;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+#reg-class {
+  width: auto;
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 220px;
 }
 
 .view-toolbar {
@@ -1489,10 +1545,22 @@ select.form-control {
   }
 }
 
-/* Responsive adjustments */
-@media (max-width: 768px) {
-  .app-container {
-    padding: 1rem;
+/* Header collapses into a burger menu on mobile & tablet */
+@media (max-width: 1024px) {
+  .header-burger {
+    display: flex;
+  }
+
+  .header-collapsible {
+    display: none;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .header-collapsible.is-open {
+    display: flex;
   }
 
   .header-metrics {
@@ -1502,6 +1570,24 @@ select.form-control {
 
   .metric-chip {
     flex: 1 1 45%;
+  }
+
+  .header-actions {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .header-actions .btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .app-container {
+    padding: 1rem;
   }
 
   .form-row {
