@@ -58,6 +58,56 @@ function isValidSession(token) {
   return true;
 }
 
+// ==========================================
+// STUDENT PORTAL SESSIONS (separate, self-service, no password)
+// ==========================================
+const STUDENT_SESSION_COOKIE_NAME = 'dojo_student_session';
+const studentSessions = new Map(); // token -> { studentId, createdAt }
+
+function createStudentSession(studentId) {
+  const token = crypto.randomBytes(32).toString('hex');
+  studentSessions.set(token, { studentId, createdAt: Date.now() });
+  return token;
+}
+
+function getValidStudentSession(token) {
+  if (!token) return null;
+  const session = studentSessions.get(token);
+  if (!session) return null;
+  if (Date.now() - session.createdAt > SESSION_MAX_AGE_MS) {
+    studentSessions.delete(token);
+    return null;
+  }
+  return session;
+}
+
+function setStudentSessionCookie(req, res, token) {
+  const secureFlag = isHttpsRequest(req) ? ' Secure;' : '';
+  res.setHeader('Set-Cookie', `${STUDENT_SESSION_COOKIE_NAME}=${token}; HttpOnly; SameSite=Lax; Path=/;${secureFlag}`);
+}
+
+function clearStudentSessionCookie(req, res) {
+  const secureFlag = isHttpsRequest(req) ? ' Secure;' : '';
+  res.setHeader('Set-Cookie', `${STUDENT_SESSION_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0;${secureFlag}`);
+}
+
+// Basic brute-force throttle: first name + association number is much lower
+// entropy than a real password, so cap attempts per IP within a time window.
+const STUDENT_LOGIN_MAX_ATTEMPTS = 8;
+const STUDENT_LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const studentLoginAttempts = new Map(); // ip -> { count, firstAttempt }
+
+function checkStudentLoginRateLimit(ip) {
+  const now = Date.now();
+  const entry = studentLoginAttempts.get(ip);
+  if (!entry || now - entry.firstAttempt > STUDENT_LOGIN_WINDOW_MS) {
+    studentLoginAttempts.set(ip, { count: 1, firstAttempt: now });
+    return true;
+  }
+  entry.count += 1;
+  return entry.count <= STUDENT_LOGIN_MAX_ATTEMPTS;
+}
+
 function parseCookies(req) {
   const header = req.headers.cookie;
   const cookies = {};
@@ -205,9 +255,60 @@ const server = http.createServer(async (req, res) => {
       }
 
       // ------------------------------------------
-      // LOGIN GATE — every other /api/* route requires a valid session
+      // STUDENT PORTAL ROUTES (self-service, gated by their own session below —
+      // not gated by, and never granted, the admin session)
       // ------------------------------------------
-      if (!pathname.startsWith('/api/auth/')) {
+
+      // GET /api/student-auth/status
+      if (pathname === '/api/student-auth/status' && method === 'GET') {
+        const cookies = parseCookies(req);
+        const session = getValidStudentSession(cookies[STUDENT_SESSION_COOKIE_NAME]);
+        return sendJSON(res, { authenticated: !!session });
+      }
+
+      // POST /api/student-auth/login  { firstName, associationNo }
+      if (pathname === '/api/student-auth/login' && method === 'POST') {
+        const ip = req.socket.remoteAddress || 'unknown';
+        if (!checkStudentLoginRateLimit(ip)) {
+          return sendError(res, 'Too many login attempts. Please try again in 15 minutes.', 429);
+        }
+        const body = await parseBody(req);
+        const firstName = (body.firstName || '').trim();
+        const associationNo = (body.associationNo || '').trim();
+        if (!firstName || !associationNo) {
+          return sendError(res, 'First name and association number are required', 400);
+        }
+        const student = db.findStudentForLogin(firstName, associationNo);
+        if (!student) {
+          return sendError(res, 'No matching student found. Check your first name and association number.', 401);
+        }
+        const token = createStudentSession(student.id);
+        setStudentSessionCookie(req, res, token);
+        return sendJSON(res, { success: true, name: student.name });
+      }
+
+      // POST /api/student-auth/logout
+      if (pathname === '/api/student-auth/logout' && method === 'POST') {
+        const cookies = parseCookies(req);
+        if (cookies[STUDENT_SESSION_COOKIE_NAME]) studentSessions.delete(cookies[STUDENT_SESSION_COOKIE_NAME]);
+        clearStudentSessionCookie(req, res);
+        return sendJSON(res, { success: true });
+      }
+
+      // GET /api/student/me — a logged-in student's own progress, nothing else
+      if (pathname === '/api/student/me' && method === 'GET') {
+        const cookies = parseCookies(req);
+        const session = getValidStudentSession(cookies[STUDENT_SESSION_COOKIE_NAME]);
+        if (!session) return sendError(res, 'Unauthorized — please log in', 401);
+        const summary = db.getStudentPortalSummary(session.studentId);
+        if (!summary) return sendError(res, 'Student record not found', 404);
+        return sendJSON(res, summary);
+      }
+
+      // ------------------------------------------
+      // LOGIN GATE — every other /api/* route requires a valid admin session
+      // ------------------------------------------
+      if (!pathname.startsWith('/api/auth/') && !pathname.startsWith('/api/student-auth/') && pathname !== '/api/student/me') {
         const cookies = parseCookies(req);
         if (!isValidSession(cookies[SESSION_COOKIE_NAME])) {
           return sendError(res, 'Unauthorized — please log in', 401);

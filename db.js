@@ -593,6 +593,57 @@ function createDatabase(dbFilePath = path.join(__dirname, 'karate.db')) {
     },
 
     // ==========================================
+    // STUDENT SELF-SERVICE PORTAL
+    // ==========================================
+    // Students log in with first name + association number (no password).
+    // Only ever returns/looks up their OWN record - never a list of others.
+    findStudentForLogin(firstName, associationNo) {
+      const assoc = (associationNo || '').trim();
+      const target = (firstName || '').trim().toLowerCase();
+      if (!assoc || !target) return null;
+      const rows = db.prepare(`
+        SELECT id, name FROM students
+        WHERE status = 'active' AND LOWER(TRIM(association_no)) = LOWER(?)
+      `).all(assoc);
+      const match = rows.find(r => (r.name || '').trim().split(/\s+/)[0].toLowerCase() === target);
+      return match ? this.getStudentById(match.id) : null;
+    },
+
+    getStudentPortalSummary(studentId) {
+      const student = this.getStudentById(studentId);
+      if (!student) return null;
+      const monthly = this.getStudentMonthlyBreakdown(studentId);
+      const now = new Date();
+      const currentMonth = now.toISOString().slice(0, 7);
+      const currentYear = now.toISOString().slice(0, 4);
+      const thisMonth = monthly.find(m => m.month === currentMonth);
+      const lessonsThisMonth = thisMonth ? thisMonth.attended_lessons : 0;
+      const lessonsThisYear = monthly
+        .filter(m => m.month && m.month.startsWith(currentYear))
+        .reduce((sum, m) => sum + (m.attended_lessons || 0), 0);
+
+      return {
+        id: student.id,
+        name: student.name,
+        rank: student.rank,
+        association_no: student.association_no,
+        membership_start: student.membership_start,
+        membership_end: student.membership_end,
+        last_graded: student.last_graded,
+        due_testing: student.due_testing,
+        last_attended_date: student.last_attended_date,
+        total_attended: student.total_attended,
+        total_missed: student.total_missed,
+        eligibility: student.eligibility,
+        lessons_this_month: lessonsThisMonth,
+        lessons_this_year: lessonsThisYear,
+        current_month: currentMonth,
+        current_year: currentYear,
+        monthly_breakdown: monthly
+      };
+    },
+
+    // ==========================================
     // EVENTS & REMINDERS
     // ==========================================
     getEvents({ type = '', upcomingOnly = false } = {}) {

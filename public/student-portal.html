@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My Progress - Canning Town TSD</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Serif+JP:wght@600;900&display=swap"
+    rel="stylesheet">
+</head>
+
+<body>
+  <div class="portal-app" id="student-portal-root" style="display:none;">
+    <header class="portal-header">
+      <div class="brand-section">
+        <div class="brand-logo">
+          <img src="/images/gblogo.webp" width="52" alt="Canning Town TSD">
+        </div>
+        <div class="brand-titles">
+          <div class="brand-sub">MASTER ROSILLO REGISTER 2026</div>
+          <h1 class="brand-name" style="font-size: 1.3rem;">CANNING TOWN TSD</h1>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="portal-student-name" style="font-weight: 700; color: #fff;"></span>
+        <button class="btn btn-outline" id="btn-portal-logout" title="Log out">🔓 Log Out</button>
+      </div>
+    </header>
+
+    <div class="portal-panel">
+      <div class="card-header-main" style="margin-bottom: 0;">
+        <div class="student-name-group">
+          <h3 id="portal-profile-name" style="font-size: 1.1rem;"></h3>
+          <div class="student-meta-assoc">
+            <span>🥋 Assoc: <span id="portal-profile-assoc"></span></span>
+          </div>
+        </div>
+        <span class="belt-badge" id="portal-belt-badge">
+          <span class="belt-strip" id="portal-belt-strip"></span>
+          <span id="portal-belt-text"></span>
+        </span>
+      </div>
+
+      <div class="card-body-info" style="margin-top: 1.25rem;">
+        <div class="info-item">
+          <span class="info-label">📅 Member Since</span>
+          <span class="info-val" id="portal-membership-start"></span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">🥋 Last Graded</span>
+          <span class="info-val" id="portal-last-graded"></span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">🎯 Next Testing Due</span>
+          <span class="info-val highlight-test" id="portal-due-testing"></span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">📌 Last Attended</span>
+          <span class="info-val" id="portal-last-attended"></span>
+        </div>
+      </div>
+
+      <div id="portal-progress-box"></div>
+    </div>
+
+    <div class="portal-stats-row">
+      <div class="portal-stat-tile">
+        <span class="stat-value" id="portal-stat-month">0</span>
+        <span class="stat-label">Lessons This Month</span>
+      </div>
+      <div class="portal-stat-tile">
+        <span class="stat-value" id="portal-stat-year">0</span>
+        <span class="stat-label">Lessons This Year</span>
+      </div>
+      <div class="portal-stat-tile">
+        <span class="stat-value" id="portal-stat-total">0</span>
+        <span class="stat-label">Total Attended</span>
+      </div>
+      <div class="portal-stat-tile">
+        <span class="stat-value" id="portal-stat-missed">0</span>
+        <span class="stat-label">Total Missed</span>
+      </div>
+    </div>
+
+    <div class="portal-panel">
+      <h3>📊 Monthly Attendance History</h3>
+      <div class="table-container">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Month</th>
+              <th>Lessons Attended</th>
+              <th>Paid</th>
+              <th>Unpaid</th>
+            </tr>
+          </thead>
+          <tbody id="portal-monthly-tbody">
+            <tr>
+              <td colspan="4" class="text-center loading-cell">Loading your attendance history...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="portal-page" id="student-portal-loading">
+    <p style="color: var(--text-muted);">Loading your progress...</p>
+  </div>
+
+  <script src="student.js"></script>
+</body>
+
+</html>
