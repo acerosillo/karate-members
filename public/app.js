@@ -549,11 +549,11 @@ function renderRegisterTable() {
   });
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="7" class="text-center loading-cell">No students match the current filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="6" class="text-center loading-cell">No students match the current filters.</td></tr>';
     return;
   }
 
-  filtered.forEach((item, index) => {
+  filtered.forEach((item) => {
     const tr = document.createElement('tr');
     const isMissedAlert = item.total_missed >= 5;
     const isUnpaidAlert = item.attendance_status === 'present' && (!item.paid || item.paid === 0);
@@ -564,22 +564,9 @@ function renderRegisterTable() {
     const beltClass = getBeltClass(item.rank);
 
     tr.innerHTML = `
-      <td>${index + 1}</td>
       <td>
         <strong style="color: #fff; font-size: 0.95rem;">${escapeHTML(item.name)}</strong>
         ${isMissedAlert ? `<span class="badge-missed-alert" title="Student has missed ${item.total_missed} lessons!">⚠️ ${item.total_missed} Missed</span>` : ''}
-      </td>
-      <td>
-        <span class="belt-badge ${beltClass}">
-          <span class="belt-strip"></span>
-          ${escapeHTML(item.rank || 'White')}
-        </span>
-      </td>
-      <td><span style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">${escapeHTML(item.association_no || 'N/A')}</span></td>
-      <td>
-        <span class="pill pill-present" style="font-size: 0.76rem;">
-          ${item.current_month_lessons || 0} lessons
-        </span>
       </td>
       <td>
         <div class="status-toggle-group">
@@ -592,11 +579,23 @@ function renderRegisterTable() {
         </div>
       </td>
       <td>
+        <span class="pill pill-present" style="font-size: 0.76rem;">
+          ${item.current_month_lessons || 0} lessons
+        </span>
+      </td>
+      <td>
         <button type="button" class="payment-btn ${item.attendance_status !== 'present' ? 'is-disabled' : item.paid ? 'is-paid' : 'is-unpaid'}"
           data-student-id="${item.student_id}" ${item.attendance_status !== 'present' ? 'disabled' : ''}>
           ${item.attendance_status !== 'present' ? '—' : item.paid ? '✓ Paid' : '⚠️ Unpaid'}
         </button>
       </td>
+      <td>
+        <span class="belt-badge ${beltClass}">
+          <span class="belt-strip"></span>
+          ${escapeHTML(item.rank || 'White')}
+        </span>
+      </td>
+      <td><span style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">${escapeHTML(item.association_no || 'N/A')}</span></td>
     `;
 
     tbody.appendChild(tr);
