@@ -1,4 +1,4 @@
-const { DatabaseSync } = require('node:sqlite');
+const { createClient } = require('@libsql/client');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -180,107 +180,170 @@ function evaluateEligibility(student) {
   };
 }
 
-function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname, 'karate.db')) {
-  // Make sure the target directory exists (e.g. a freshly-mounted Render
-  // persistent disk) before SQLite tries to open/create the file in it.
-  const dir = path.dirname(dbFilePath);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  const db = new DatabaseSync(dbFilePath);
+// Turns a plain filesystem path into the "file:" URL form @libsql/client
+// expects, using forward slashes so Windows drive-letter paths work too
+// (e.g. "C:\foo\karate.db" -> "file:C:/foo/karate.db").
+function toFileUrl(filePath) {
+  const normalized = filePath.split(path.sep).join('/');
+  return `file:${normalized}`;
+}
 
-  // Enable foreign keys
-  db.exec('PRAGMA foreign_keys = ON;');
+// Resolves the connection target, in priority order:
+//   1. an explicit argument (used by seed.js / tests)
+//   2. TURSO_DATABASE_URL (+ TURSO_AUTH_TOKEN) - a hosted Turso database,
+//      which keeps data intact regardless of what happens to the app host
+//   3. DB_PATH - a local file path (e.g. a Render persistent disk mount)
+//   4. a local karate.db file next to this script, for local development
+function resolveConnection(pathOrUrl, authToken) {
+  let url = pathOrUrl || process.env.TURSO_DATABASE_URL || process.env.DB_PATH || path.join(__dirname, 'karate.db');
+  const token = authToken !== undefined ? authToken : process.env.TURSO_AUTH_TOKEN;
+
+  // Anything that isn't already a proper "scheme://" URL, a "file:" URL, or
+  // the special ":memory:" (used by tests) is treated as a bare filesystem
+  // path and converted.
+  if (url !== ':memory:' && !/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(url) && !url.startsWith('file:')) {
+    url = toFileUrl(url);
+  }
+
+  return { url, token };
+}
+
+const SCHEMA_STATEMENTS = [
+  `CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    dob TEXT NOT NULL,
+    gender TEXT,
+    address TEXT NOT NULL,
+    tel TEXT NOT NULL,
+    association_no TEXT NOT NULL,
+    membership_start TEXT NOT NULL,
+    membership_end TEXT NOT NULL,
+    rank TEXT NOT NULL,
+    last_graded TEXT,
+    due_testing TEXT,
+    notes TEXT,
+    status TEXT DEFAULT 'active',
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS attendance (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    session_date TEXT NOT NULL,
+    class_name TEXT NOT NULL DEFAULT 'Regular Class',
+    status TEXT NOT NULL DEFAULT 'present',
+    paid INTEGER NOT NULL DEFAULT 0,
+    payment_method TEXT,
+    amount_paid REAL DEFAULT 0.0,
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(student_id, session_date, class_name)
+  )`,
+  `CREATE TABLE IF NOT EXISTS events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    event_date TEXT NOT NULL,
+    event_time TEXT,
+    location TEXT,
+    description TEXT,
+    reminder_days INTEGER DEFAULT 7,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE TABLE IF NOT EXISTS event_participants (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+    student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'registered',
+    notes TEXT,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(event_id, student_id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS auth_config (
+    id INTEGER PRIMARY KEY CHECK (id = 1),
+    username TEXT NOT NULL,
+    password_hash TEXT NOT NULL,
+    password_salt TEXT NOT NULL,
+    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(session_date)`,
+  `CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date)`
+];
+
+async function createDatabase(pathOrUrl, authToken) {
+  const { url, token } = resolveConnection(pathOrUrl, authToken);
+
+  // Make sure the target directory exists for local file databases (e.g. a
+  // freshly-mounted Render persistent disk) before opening/creating the file.
+  // Hosted libsql:// / https:// Turso URLs need no such thing.
+  if (url.startsWith('file:')) {
+    const filePath = url.slice('file:'.length);
+    const dir = path.dirname(filePath);
+    if (dir && dir !== '.' && !fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  }
+
+  const client = createClient(token ? { url, authToken: token, intMode: 'number' } : { url, intMode: 'number' });
+
+  // --------------------------------------------
+  // Small query helpers - the rest of this file works with plain arrays of
+  // plain objects, the same shape node:sqlite used to hand back.
+  // --------------------------------------------
+  function toObject(row, columns) {
+    const obj = {};
+    columns.forEach((col, i) => { obj[col] = row[i]; });
+    return obj;
+  }
+
+  async function all(sql, args = []) {
+    const result = await client.execute({ sql, args });
+    return result.rows.map(row => toObject(row, result.columns));
+  }
+
+  async function get(sql, args = []) {
+    const rows = await all(sql, args);
+    return rows[0] || null;
+  }
+
+  async function run(sql, args = []) {
+    const result = await client.execute({ sql, args });
+    return {
+      lastInsertRowid: result.lastInsertRowid !== undefined && result.lastInsertRowid !== null
+        ? Number(result.lastInsertRowid)
+        : undefined,
+      changes: result.rowsAffected
+    };
+  }
+
+  await client.execute('PRAGMA foreign_keys = ON;');
 
   // Schema creation
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS students (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      dob TEXT NOT NULL,
-      gender TEXT,
-      address TEXT NOT NULL,
-      tel TEXT NOT NULL,
-      association_no TEXT NOT NULL,
-      membership_start TEXT NOT NULL,
-      membership_end TEXT NOT NULL,
-      rank TEXT NOT NULL,
-      last_graded TEXT,
-      due_testing TEXT,
-      notes TEXT,
-      status TEXT DEFAULT 'active',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS attendance (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-      session_date TEXT NOT NULL,
-      class_name TEXT NOT NULL DEFAULT 'Regular Class',
-      status TEXT NOT NULL DEFAULT 'present',
-      paid INTEGER NOT NULL DEFAULT 0,
-      payment_method TEXT,
-      amount_paid REAL DEFAULT 0.0,
-      notes TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(student_id, session_date, class_name)
-    );
-
-    CREATE TABLE IF NOT EXISTS events (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT NOT NULL,
-      event_type TEXT NOT NULL,
-      event_date TEXT NOT NULL,
-      event_time TEXT,
-      location TEXT,
-      description TEXT,
-      reminder_days INTEGER DEFAULT 7,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE TABLE IF NOT EXISTS event_participants (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-      student_id INTEGER NOT NULL REFERENCES students(id) ON DELETE CASCADE,
-      status TEXT DEFAULT 'registered',
-      notes TEXT,
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(event_id, student_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS auth_config (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
-      username TEXT NOT NULL,
-      password_hash TEXT NOT NULL,
-      password_salt TEXT NOT NULL,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(session_date);
-    CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id);
-    CREATE INDEX IF NOT EXISTS idx_events_date ON events(event_date);
-  `);
+  for (const statement of SCHEMA_STATEMENTS) {
+    await client.execute(statement);
+  }
 
   // Migration: add gender column for databases created before this field existed
-  const studentColumns = db.prepare('PRAGMA table_info(students)').all();
+  const studentColumns = await all('PRAGMA table_info(students)');
   if (!studentColumns.some(col => col.name === 'gender')) {
-    db.exec('ALTER TABLE students ADD COLUMN gender TEXT');
+    await client.execute('ALTER TABLE students ADD COLUMN gender TEXT');
   }
 
   return {
-    rawDb: db,
+    rawClient: client,
 
     // ==========================================
     // STUDENTS
     // ==========================================
-    getStudents({ search = '', rank = '', status = 'active' } = {}) {
+    async getStudents({ search = '', rank = '', status = 'active' } = {}) {
       let sql = `
-        SELECT s.*, 
+        SELECT s.*,
           (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as total_attended,
           (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'absent') as total_missed,
           (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present' AND a.session_date >= COALESCE(s.last_graded, s.membership_start)) as lessons_since_last_graded,
           (SELECT MAX(a.session_date) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as last_attended_date
-        FROM students s 
+        FROM students s
         WHERE 1=1
       `;
       const params = [];
@@ -300,16 +363,15 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
       }
 
       sql += ' ORDER BY s.name ASC';
-      const stmt = db.prepare(sql);
-      const rows = stmt.all(...params);
+      const rows = await all(sql, params);
       return rows.map(r => ({
         ...r,
         eligibility: evaluateEligibility(r)
       }));
     },
 
-    getStudentById(id) {
-      const stmt = db.prepare(`
+    async getStudentById(id) {
+      const row = await get(`
         SELECT s.*,
           (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as total_attended,
           (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'absent') as total_missed,
@@ -317,8 +379,7 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
           (SELECT MAX(a.session_date) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as last_attended_date
         FROM students s
         WHERE s.id = ?
-      `);
-      const row = stmt.get(id);
+      `, [id]);
       if (!row) return null;
       return {
         ...row,
@@ -326,15 +387,14 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
       };
     },
 
-    createStudent(data) {
-      const stmt = db.prepare(`
+    async createStudent(data) {
+      const result = await run(`
         INSERT INTO students (
           name, dob, gender, address, tel, association_no,
           membership_start, membership_end, rank,
           last_graded, due_testing, notes, status
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `);
-      const result = stmt.run(
+      `, [
         data.name || '',
         data.dob || '',
         data.gender || null,
@@ -348,12 +408,12 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         data.due_testing || null,
         data.notes || '',
         data.status || 'active'
-      );
+      ]);
       return this.getStudentById(result.lastInsertRowid);
     },
 
-    updateStudent(id, data) {
-      const stmt = db.prepare(`
+    async updateStudent(id, data) {
+      await run(`
         UPDATE students SET
           name = ?,
           dob = ?,
@@ -369,8 +429,7 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
           notes = ?,
           status = ?
         WHERE id = ?
-      `);
-      stmt.run(
+      `, [
         data.name || '',
         data.dob || '',
         data.gender || null,
@@ -385,22 +444,21 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         data.notes || '',
         data.status || 'active',
         id
-      );
+      ]);
       return this.getStudentById(id);
     },
 
-    deleteStudent(id) {
-      const stmt = db.prepare('DELETE FROM students WHERE id = ?');
-      const res = stmt.run(id);
+    async deleteStudent(id) {
+      const res = await run('DELETE FROM students WHERE id = ?', [id]);
       return res.changes > 0;
     },
 
     // ==========================================
     // ATTENDANCE & REGISTER
     // ==========================================
-    getRegisterForSession(sessionDate, className = 'Regular Class') {
-      const stmt = db.prepare(`
-        SELECT 
+    async getRegisterForSession(sessionDate, className = 'Regular Class') {
+      return all(`
+        SELECT
           s.id as student_id,
           s.name,
           s.rank,
@@ -421,12 +479,11 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         LEFT JOIN attendance a ON s.id = a.student_id AND a.session_date = ? AND a.class_name = ?
         WHERE s.status = 'active'
         ORDER BY s.name ASC
-      `);
-      return stmt.all(sessionDate, sessionDate, className);
+      `, [sessionDate, sessionDate, className]);
     },
 
-    saveAttendanceRecord({ student_id, session_date, class_name = 'Regular Class', status = 'present', paid = 0, payment_method = null, amount_paid = 0.0, notes = '' }) {
-      const stmt = db.prepare(`
+    async saveAttendanceRecord({ student_id, session_date, class_name = 'Regular Class', status = 'present', paid = 0, payment_method = null, amount_paid = 0.0, notes = '' }) {
+      await run(`
         INSERT INTO attendance (student_id, session_date, class_name, status, paid, payment_method, amount_paid, notes)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(student_id, session_date, class_name) DO UPDATE SET
@@ -435,8 +492,7 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
           payment_method = excluded.payment_method,
           amount_paid = excluded.amount_paid,
           notes = excluded.notes
-      `);
-      stmt.run(
+      `, [
         student_id,
         session_date,
         class_name,
@@ -445,23 +501,22 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         payment_method,
         Number(amount_paid) || 0.0,
         notes
-      );
+      ]);
       return this.getAttendanceRecord(student_id, session_date, class_name);
     },
 
-    getAttendanceRecord(student_id, session_date, class_name = 'Regular Class') {
-      const stmt = db.prepare(`
-        SELECT * FROM attendance 
+    async getAttendanceRecord(student_id, session_date, class_name = 'Regular Class') {
+      return get(`
+        SELECT * FROM attendance
         WHERE student_id = ? AND session_date = ? AND class_name = ?
-      `);
-      return stmt.get(student_id, session_date, class_name);
+      `, [student_id, session_date, class_name]);
     },
 
-    saveBulkAttendance(session_date, class_name, records) {
+    async saveBulkAttendance(session_date, class_name, records) {
       const results = [];
       for (const rec of records) {
         if (!rec.student_id) continue;
-        const res = this.saveAttendanceRecord({
+        const res = await this.saveAttendanceRecord({
           student_id: rec.student_id,
           session_date,
           class_name,
@@ -476,21 +531,20 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
       return results;
     },
 
-    getStudentAttendanceHistory(student_id) {
-      const stmt = db.prepare(`
+    async getStudentAttendanceHistory(student_id) {
+      return all(`
         SELECT * FROM attendance
         WHERE student_id = ?
         ORDER BY session_date DESC, class_name ASC
-      `);
-      return stmt.all(student_id);
+      `, [student_id]);
     },
 
     // ==========================================
     // MONTHLY COUNTS & MISSED LESSONS (>5)
     // ==========================================
-    getMonthlyLessonCounts(yearMonth = null) {
+    async getMonthlyLessonCounts(yearMonth = null) {
       let sql = `
-        SELECT 
+        SELECT
           s.id as student_id,
           s.name,
           s.rank,
@@ -513,13 +567,12 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         GROUP BY s.id, month
         ORDER BY month DESC, attended_lessons DESC, s.name ASC
       `;
-      const stmt = db.prepare(sql);
-      return stmt.all(...params);
+      return all(sql, params);
     },
 
-    getStudentMonthlyBreakdown(student_id) {
-      const stmt = db.prepare(`
-        SELECT 
+    async getStudentMonthlyBreakdown(student_id) {
+      return all(`
+        SELECT
           strftime('%Y-%m', session_date) as month,
           COUNT(*) as attended_lessons,
           SUM(CASE WHEN paid = 1 THEN 1 ELSE 0 END) as paid_lessons,
@@ -529,16 +582,15 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         WHERE student_id = ? AND status = 'present'
         GROUP BY month
         ORDER BY month DESC
-      `);
-      return stmt.all(student_id);
+      `, [student_id]);
     },
 
-    getMissedLessonsReport() {
+    async getMissedLessonsReport() {
       // Highlights students who have missed >5 lessons
       // Checks:
       // 1. Total missed lessons in database >= 5
       // 2. Consecutive recent missed lessons
-      const activeStudents = db.prepare(`
+      const activeStudents = await all(`
         SELECT s.*,
           (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'present') as total_attended,
           (SELECT COUNT(*) FROM attendance a WHERE a.student_id = s.id AND a.status = 'absent') as total_missed,
@@ -546,17 +598,17 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         FROM students s
         WHERE s.status = 'active'
         ORDER BY total_missed DESC, s.name ASC
-      `).all();
+      `);
 
-      return activeStudents.map(student => {
+      return Promise.all(activeStudents.map(async student => {
         // Calculate recent streak of missed classes
-        const recentRecords = db.prepare(`
+        const recentRecords = await all(`
           SELECT status, session_date
           FROM attendance
           WHERE student_id = ?
           ORDER BY session_date DESC
           LIMIT 10
-        `).all(student.id);
+        `, [student.id]);
 
         let consecutiveMissed = 0;
         for (const r of recentRecords) {
@@ -575,12 +627,12 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
           is_missed_alert: isAlert, // Highlight if missed > 5 lessons
           recent_records: recentRecords
         };
-      });
+      }));
     },
 
-    getUnpaidTrainedSessions() {
-      const stmt = db.prepare(`
-        SELECT 
+    async getUnpaidTrainedSessions() {
+      return all(`
+        SELECT
           a.id as attendance_id,
           a.session_date,
           a.class_name,
@@ -596,7 +648,6 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         WHERE a.status = 'present' AND a.paid = 0
         ORDER BY a.session_date DESC, s.name ASC
       `);
-      return stmt.all();
     },
 
     // ==========================================
@@ -604,22 +655,22 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
     // ==========================================
     // Students log in with first name + association number (no password).
     // Only ever returns/looks up their OWN record - never a list of others.
-    findStudentForLogin(firstName, associationNo) {
+    async findStudentForLogin(firstName, associationNo) {
       const assoc = (associationNo || '').trim();
       const target = (firstName || '').trim().toLowerCase();
       if (!assoc || !target) return null;
-      const rows = db.prepare(`
+      const rows = await all(`
         SELECT id, name FROM students
         WHERE status = 'active' AND LOWER(TRIM(association_no)) = LOWER(?)
-      `).all(assoc);
+      `, [assoc]);
       const match = rows.find(r => (r.name || '').trim().split(/\s+/)[0].toLowerCase() === target);
       return match ? this.getStudentById(match.id) : null;
     },
 
-    getStudentPortalSummary(studentId) {
-      const student = this.getStudentById(studentId);
+    async getStudentPortalSummary(studentId) {
+      const student = await this.getStudentById(studentId);
       if (!student) return null;
-      const monthly = this.getStudentMonthlyBreakdown(studentId);
+      const monthly = await this.getStudentMonthlyBreakdown(studentId);
       const now = new Date();
       const currentMonth = now.toISOString().slice(0, 7);
       const currentYear = now.toISOString().slice(0, 4);
@@ -653,7 +704,7 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
     // ==========================================
     // EVENTS & REMINDERS
     // ==========================================
-    getEvents({ type = '', upcomingOnly = false } = {}) {
+    async getEvents({ type = '', upcomingOnly = false } = {}) {
       let sql = `
         SELECT e.*,
           (SELECT COUNT(*) FROM event_participants ep WHERE ep.event_id = e.id) as participant_count
@@ -669,26 +720,23 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         sql += " AND e.event_date >= date('now', 'localtime')";
       }
       sql += ' ORDER BY e.event_date ASC';
-      const stmt = db.prepare(sql);
-      return stmt.all(...params);
+      return all(sql, params);
     },
 
-    getEventById(id) {
-      const stmt = db.prepare(`
+    async getEventById(id) {
+      return get(`
         SELECT e.*,
           (SELECT COUNT(*) FROM event_participants ep WHERE ep.event_id = e.id) as participant_count
         FROM events e
         WHERE e.id = ?
-      `);
-      return stmt.get(id);
+      `, [id]);
     },
 
-    createEvent(data) {
-      const stmt = db.prepare(`
+    async createEvent(data) {
+      const res = await run(`
         INSERT INTO events (title, event_type, event_date, event_time, location, description, reminder_days)
         VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
-      const res = stmt.run(
+      `, [
         data.title,
         data.event_type || 'grading',
         data.event_date,
@@ -696,12 +744,12 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         data.location || '',
         data.description || '',
         Number(data.reminder_days) || 7
-      );
+      ]);
       return this.getEventById(res.lastInsertRowid);
     },
 
-    updateEvent(id, data) {
-      const stmt = db.prepare(`
+    async updateEvent(id, data) {
+      await run(`
         UPDATE events SET
           title = ?,
           event_type = ?,
@@ -711,8 +759,7 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
           description = ?,
           reminder_days = ?
         WHERE id = ?
-      `);
-      stmt.run(
+      `, [
         data.title,
         data.event_type || 'grading',
         data.event_date,
@@ -721,19 +768,18 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         data.description || '',
         Number(data.reminder_days) || 7,
         id
-      );
+      ]);
       return this.getEventById(id);
     },
 
-    deleteEvent(id) {
-      const stmt = db.prepare('DELETE FROM events WHERE id = ?');
-      const res = stmt.run(id);
+    async deleteEvent(id) {
+      const res = await run('DELETE FROM events WHERE id = ?', [id]);
       return res.changes > 0;
     },
 
-    getEventParticipants(eventId) {
-      const stmt = db.prepare(`
-        SELECT 
+    async getEventParticipants(eventId) {
+      return all(`
+        SELECT
           ep.id as participant_id,
           ep.status as participant_status,
           ep.notes as participant_notes,
@@ -747,29 +793,26 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         JOIN students s ON ep.student_id = s.id
         WHERE ep.event_id = ?
         ORDER BY s.name ASC
-      `);
-      return stmt.all(eventId);
+      `, [eventId]);
     },
 
-    addEventParticipant(eventId, studentId, status = 'registered', notes = '') {
-      const stmt = db.prepare(`
+    async addEventParticipant(eventId, studentId, status = 'registered', notes = '') {
+      await run(`
         INSERT INTO event_participants (event_id, student_id, status, notes)
         VALUES (?, ?, ?, ?)
         ON CONFLICT(event_id, student_id) DO UPDATE SET
           status = excluded.status,
           notes = excluded.notes
-      `);
-      stmt.run(eventId, studentId, status, notes);
+      `, [eventId, studentId, status, notes]);
       return true;
     },
 
-    removeEventParticipant(eventId, studentId) {
-      const stmt = db.prepare('DELETE FROM event_participants WHERE event_id = ? AND student_id = ?');
-      const res = stmt.run(eventId, studentId);
+    async removeEventParticipant(eventId, studentId) {
+      const res = await run('DELETE FROM event_participants WHERE event_id = ? AND student_id = ?', [eventId, studentId]);
       return res.changes > 0;
     },
 
-    getGradingCandidates(targetDate = null) {
+    async getGradingCandidates(targetDate = null) {
       // Find students whose due_testing is around the targetDate or within 45 days
       let sql = `
         SELECT s.*,
@@ -786,8 +829,7 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
         sql += " AND s.due_testing IS NOT NULL AND s.due_testing <= date('now', '+30 days')";
       }
       sql += ' ORDER BY s.due_testing ASC, s.rank ASC';
-      const stmt = db.prepare(sql);
-      const rows = stmt.all(...params);
+      const rows = await all(sql, params);
       return rows.map(r => ({
         ...r,
         eligibility: evaluateEligibility(r)
@@ -797,54 +839,54 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
     // ==========================================
     // STATS & DASHBOARD OVERVIEW
     // ==========================================
-    getDashboardStats() {
-      const totalStudents = db.prepare("SELECT COUNT(*) as count FROM students WHERE status = 'active'").get().count;
-      const missedAlertsCount = this.getMissedLessonsReport().filter(s => s.is_missed_alert).length;
-      
-      const unpaidSessions = db.prepare(`
+    async getDashboardStats() {
+      const totalStudentsRow = await get("SELECT COUNT(*) as count FROM students WHERE status = 'active'");
+      const missedAlertsCount = (await this.getMissedLessonsReport()).filter(s => s.is_missed_alert).length;
+
+      const unpaidSessions = await get(`
         SELECT COUNT(*) as count, COALESCE(SUM(amount_paid), 0) as total_amount
         FROM attendance
         WHERE status = 'present' AND paid = 0
-      `).get();
+      `);
 
-      const upcomingEvents = db.prepare(`
+      const upcomingEventsRow = await get(`
         SELECT COUNT(*) as count
         FROM events
         WHERE event_date >= date('now', 'localtime')
-      `).get().count;
+      `);
 
       const currentMonth = new Date().toISOString().slice(0, 7);
-      const monthlyLessonsAttended = db.prepare(`
+      const monthlyLessonsRow = await get(`
         SELECT COUNT(*) as count
         FROM attendance
         WHERE status = 'present' AND strftime('%Y-%m', session_date) = ?
-      `).get(currentMonth).count;
+      `, [currentMonth]);
 
       return {
-        total_students: totalStudents,
+        total_students: totalStudentsRow.count,
         missed_alerts_count: missedAlertsCount,
         unpaid_count: unpaidSessions.count,
-        upcoming_events_count: upcomingEvents,
+        upcoming_events_count: upcomingEventsRow.count,
         current_month: currentMonth,
-        monthly_lessons_attended: monthlyLessonsAttended
+        monthly_lessons_attended: monthlyLessonsRow.count
       };
     },
 
     // ==========================================
     // LOGIN / AUTH
     // ==========================================
-    getAuthConfig() {
-      return db.prepare('SELECT username, password_hash, password_salt FROM auth_config WHERE id = 1').get() || null;
+    async getAuthConfig() {
+      return get('SELECT username, password_hash, password_salt FROM auth_config WHERE id = 1');
     },
 
-    isAuthConfigured() {
-      return !!this.getAuthConfig();
+    async isAuthConfigured() {
+      return !!(await this.getAuthConfig());
     },
 
-    setupAuth(username, password) {
+    async setupAuth(username, password) {
       const salt = crypto.randomBytes(16).toString('hex');
       const hash = hashPassword(password, salt);
-      db.prepare(`
+      await run(`
         INSERT INTO auth_config (id, username, password_hash, password_salt)
         VALUES (1, ?, ?, ?)
         ON CONFLICT(id) DO UPDATE SET
@@ -852,12 +894,12 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
           password_hash = excluded.password_hash,
           password_salt = excluded.password_salt,
           updated_at = CURRENT_TIMESTAMP
-      `).run(username, hash, salt);
+      `, [username, hash, salt]);
       return true;
     },
 
-    verifyCredentials(username, password) {
-      const cfg = this.getAuthConfig();
+    async verifyCredentials(username, password) {
+      const cfg = await this.getAuthConfig();
       if (!cfg || !username || !password) return false;
       if (cfg.username !== username) return false;
       const candidateHash = Buffer.from(hashPassword(password, cfg.password_salt), 'hex');
@@ -866,17 +908,17 @@ function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname,
       return crypto.timingSafeEqual(candidateHash, storedHash);
     },
 
-    changePassword(currentPassword, newPassword) {
-      const cfg = this.getAuthConfig();
+    async changePassword(currentPassword, newPassword) {
+      const cfg = await this.getAuthConfig();
       if (!cfg) return { success: false, message: 'Login has not been set up yet' };
-      if (!this.verifyCredentials(cfg.username, currentPassword)) {
+      if (!(await this.verifyCredentials(cfg.username, currentPassword))) {
         return { success: false, message: 'Current password is incorrect' };
       }
       const salt = crypto.randomBytes(16).toString('hex');
       const hash = hashPassword(newPassword, salt);
-      db.prepare(`
+      await run(`
         UPDATE auth_config SET password_hash = ?, password_salt = ?, updated_at = CURRENT_TIMESTAMP WHERE id = 1
-      `).run(hash, salt);
+      `, [hash, salt]);
       return { success: true };
     }
   };

@@ -5,9 +5,9 @@
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node --experimental-sqlite server.js",
-    "seed": "node --experimental-sqlite seed.js",
-    "test": "node --experimental-sqlite --test test/*.test.js"
+    "start": "node server.js",
+    "seed": "node seed.js",
+    "test": "node --test test/*.test.js"
   },
   "keywords": [
     "martial-arts",
@@ -16,5 +16,8 @@
     "dojo-management"
   ],
   "author": "",
-  "license": "ISC"
+  "license": "ISC",
+  "dependencies": {
+    "@libsql/client": "^0.18.0"
+  }
 }

@@ -2,10 +2,10 @@ const test = require('node:test');
 const assert = require('node:assert');
 const { createDatabase } = require('../db.js');
 
-test('Database: Student registration and profile fields', () => {
-  const db = createDatabase(':memory:');
+test('Database: Student registration and profile fields', async () => {
+  const db = await createDatabase(':memory:');
 
-  const newStudent = db.createStudent({
+  const newStudent = await db.createStudent({
     name: 'Hiroshi Tanaka',
     dob: '1998-05-20',
     address: '10 Dojo Way, Manchester, M1 1AA',
@@ -28,7 +28,7 @@ test('Database: Student registration and profile fields', () => {
   assert.strictEqual(newStudent.due_testing, '2026-10-15');
 
   // Update student rank
-  const updated = db.updateStudent(newStudent.id, {
+  const updated = await db.updateStudent(newStudent.id, {
     ...newStudent,
     rank: '1st Kyu (Brown)',
     last_graded: '2026-10-15',
@@ -39,10 +39,10 @@ test('Database: Student registration and profile fields', () => {
   assert.strictEqual(updated.last_graded, '2026-10-15');
 });
 
-test('Database: Attendance registration & Payment tracking per training day', () => {
-  const db = createDatabase(':memory:');
+test('Database: Attendance registration & Payment tracking per training day', async () => {
+  const db = await createDatabase(':memory:');
 
-  const student = db.createStudent({
+  const student = await db.createStudent({
     name: 'Kenji Sato',
     dob: '1985-05-12',
     address: 'Tokyo Garden, Birmingham',
@@ -54,7 +54,7 @@ test('Database: Attendance registration & Payment tracking per training day', ()
   });
 
   // 1. Mark present and paid
-  const record1 = db.saveAttendanceRecord({
+  const record1 = await db.saveAttendanceRecord({
     student_id: student.id,
     session_date: '2026-09-01',
     class_name: 'Seniors Kata',
@@ -71,7 +71,7 @@ test('Database: Attendance registration & Payment tracking per training day', ()
   assert.strictEqual(record1.payment_method, 'Card');
 
   // 2. Mark another day present but UNPAID
-  const record2 = db.saveAttendanceRecord({
+  const record2 = await db.saveAttendanceRecord({
     student_id: student.id,
     session_date: '2026-09-03',
     class_name: 'Seniors Kata',
@@ -85,16 +85,16 @@ test('Database: Attendance registration & Payment tracking per training day', ()
   assert.strictEqual(record2.paid, 0);
 
   // Verify unpaid tracker catches this session
-  const unpaid = db.getUnpaidTrainedSessions();
+  const unpaid = await db.getUnpaidTrainedSessions();
   assert.strictEqual(unpaid.length, 1);
   assert.strictEqual(unpaid[0].student_name, 'Kenji Sato');
   assert.strictEqual(unpaid[0].session_date, '2026-09-03');
 });
 
-test('Database: Monthly lesson count calculation', () => {
-  const db = createDatabase(':memory:');
+test('Database: Monthly lesson count calculation', async () => {
+  const db = await createDatabase(':memory:');
 
-  const student = db.createStudent({
+  const student = await db.createStudent({
     name: 'Emily Chen',
     dob: '2004-09-18',
     address: 'Harborne',
@@ -106,8 +106,8 @@ test('Database: Monthly lesson count calculation', () => {
   });
 
   // Add 4 sessions in August 2026
-  ['2026-08-04', '2026-08-11', '2026-08-18', '2026-08-25'].forEach(date => {
-    db.saveAttendanceRecord({
+  for (const date of ['2026-08-04', '2026-08-11', '2026-08-18', '2026-08-25']) {
+    await db.saveAttendanceRecord({
       student_id: student.id,
       session_date: date,
       class_name: 'Regular Class',
@@ -115,11 +115,11 @@ test('Database: Monthly lesson count calculation', () => {
       paid: 1,
       amount_paid: 8.0
     });
-  });
+  }
 
   // Add 2 sessions in September 2026
-  ['2026-09-01', '2026-09-03'].forEach(date => {
-    db.saveAttendanceRecord({
+  for (const date of ['2026-09-01', '2026-09-03']) {
+    await db.saveAttendanceRecord({
       student_id: student.id,
       session_date: date,
       class_name: 'Regular Class',
@@ -127,22 +127,22 @@ test('Database: Monthly lesson count calculation', () => {
       paid: 1,
       amount_paid: 8.0
     });
-  });
+  }
 
-  const augCounts = db.getMonthlyLessonCounts('2026-08');
+  const augCounts = await db.getMonthlyLessonCounts('2026-08');
   assert.strictEqual(augCounts.length, 1);
   assert.strictEqual(augCounts[0].attended_lessons, 4);
 
-  const septCounts = db.getMonthlyLessonCounts('2026-09');
+  const septCounts = await db.getMonthlyLessonCounts('2026-09');
   assert.strictEqual(septCounts.length, 1);
   assert.strictEqual(septCounts[0].attended_lessons, 2);
 });
 
-test('Database: Highlight student who missed more than 5 lessons', () => {
-  const db = createDatabase(':memory:');
+test('Database: Highlight student who missed more than 5 lessons', async () => {
+  const db = await createDatabase(':memory:');
 
   // Student A: Attends regularly (1 missed)
-  const studentGood = db.createStudent({
+  const studentGood = await db.createStudent({
     name: 'Good Attendee',
     dob: '2000-01-01',
     address: '1 Lane',
@@ -154,7 +154,7 @@ test('Database: Highlight student who missed more than 5 lessons', () => {
   });
 
   // Student B: Missed 6 lessons (>5 lessons missed!)
-  const studentAbsent = db.createStudent({
+  const studentAbsent = await db.createStudent({
     name: 'Absent Student',
     dob: '2002-02-02',
     address: '2 Lane',
@@ -166,17 +166,17 @@ test('Database: Highlight student who missed more than 5 lessons', () => {
   });
 
   // Student A records: 4 present, 1 absent
-  ['2026-08-01', '2026-08-05', '2026-08-08', '2026-08-12'].forEach(d => {
-    db.saveAttendanceRecord({ student_id: studentGood.id, session_date: d, status: 'present' });
-  });
-  db.saveAttendanceRecord({ student_id: studentGood.id, session_date: '2026-08-15', status: 'absent' });
+  for (const d of ['2026-08-01', '2026-08-05', '2026-08-08', '2026-08-12']) {
+    await db.saveAttendanceRecord({ student_id: studentGood.id, session_date: d, status: 'present' });
+  }
+  await db.saveAttendanceRecord({ student_id: studentGood.id, session_date: '2026-08-15', status: 'absent' });
 
   // Student B records: 6 absent
-  ['2026-08-01', '2026-08-05', '2026-08-08', '2026-08-12', '2026-08-15', '2026-08-19'].forEach(d => {
-    db.saveAttendanceRecord({ student_id: studentAbsent.id, session_date: d, status: 'absent' });
-  });
+  for (const d of ['2026-08-01', '2026-08-05', '2026-08-08', '2026-08-12', '2026-08-15', '2026-08-19']) {
+    await db.saveAttendanceRecord({ student_id: studentAbsent.id, session_date: d, status: 'absent' });
+  }
 
-  const report = db.getMissedLessonsReport();
+  const report = await db.getMissedLessonsReport();
   const alertAbsent = report.find(r => r.id === studentAbsent.id);
   const alertGood = report.find(r => r.id === studentGood.id);
 
@@ -187,10 +187,10 @@ test('Database: Highlight student who missed more than 5 lessons', () => {
   assert.strictEqual(alertGood.is_missed_alert, false, 'Student with only 1 missed lesson must not be flagged');
 });
 
-test('Database: Events and Grading testing reminders', () => {
-  const db = createDatabase(':memory:');
+test('Database: Events and Grading testing reminders', async () => {
+  const db = await createDatabase(':memory:');
 
-  const student = db.createStudent({
+  const student = await db.createStudent({
     name: 'David Miller',
     dob: '1992-08-19',
     address: 'Yardley',
@@ -203,7 +203,7 @@ test('Database: Events and Grading testing reminders', () => {
   });
 
   // Create event: Shodan Dan Grading
-  const event = db.createEvent({
+  const event = await db.createEvent({
     title: 'Autumn Black Belt Examination',
     event_type: 'grading',
     event_date: '2026-09-26',
@@ -216,21 +216,21 @@ test('Database: Events and Grading testing reminders', () => {
   assert.strictEqual(event.title, 'Autumn Black Belt Examination');
 
   // Verify candidate query picks up David Miller
-  const candidates = db.getGradingCandidates('2026-09-26');
+  const candidates = await db.getGradingCandidates('2026-09-26');
   assert.ok(candidates.some(c => c.id === student.id), 'Candidate due testing should appear in grading candidates');
 
   // Add participant
-  db.addEventParticipant(event.id, student.id, 'registered', '1st Dan Shodan');
-  const participants = db.getEventParticipants(event.id);
+  await db.addEventParticipant(event.id, student.id, 'registered', '1st Dan Shodan');
+  const participants = await db.getEventParticipants(event.id);
   assert.strictEqual(participants.length, 1);
   assert.strictEqual(participants[0].name, 'David Miller');
 });
 
-test('Database: Gup Belt System and Minimum Classes Requirements Check', () => {
-  const db = createDatabase(':memory:');
+test('Database: Gup Belt System and Minimum Classes Requirements Check', async () => {
+  const db = await createDatabase(':memory:');
 
   // Student 1: 8th Gup (Orange Belt) needing 24 classes & 3 months for 7th Gup (Orange Tag Belt)
-  const studentOrange = db.createStudent({
+  const studentOrange = await db.createStudent({
     name: 'Carlos Ruiz',
     dob: '2005-04-10',
     address: '15 High St',
@@ -245,7 +245,7 @@ test('Database: Gup Belt System and Minimum Classes Requirements Check', () => {
   // Record 18 classes (less than 24 classes required)
   for (let i = 1; i <= 18; i++) {
     const day = String(i).padStart(2, '0');
-    db.saveAttendanceRecord({
+    await db.saveAttendanceRecord({
       student_id: studentOrange.id,
       session_date: `2026-05-${day}`,
       class_name: 'Tuesday Class (7:00 PM - 8:00 PM)',
@@ -254,7 +254,7 @@ test('Database: Gup Belt System and Minimum Classes Requirements Check', () => {
     });
   }
 
-  const fetchedOrange1 = db.getStudentById(studentOrange.id);
+  const fetchedOrange1 = await db.getStudentById(studentOrange.id);
   assert.strictEqual(fetchedOrange1.eligibility.lessons_done, 18);
   assert.strictEqual(fetchedOrange1.eligibility.lessons_required, 24);
   assert.strictEqual(fetchedOrange1.eligibility.classes_remaining, 6);
@@ -265,7 +265,7 @@ test('Database: Gup Belt System and Minimum Classes Requirements Check', () => {
   // Now record 6 more classes (total 24)
   for (let i = 19; i <= 24; i++) {
     const day = String(i).padStart(2, '0');
-    db.saveAttendanceRecord({
+    await db.saveAttendanceRecord({
       student_id: studentOrange.id,
       session_date: `2026-05-${day}`,
       class_name: 'Saturday Class (11:30 AM - 12:30 PM)',
@@ -274,14 +274,14 @@ test('Database: Gup Belt System and Minimum Classes Requirements Check', () => {
     });
   }
 
-  const fetchedOrange2 = db.getStudentById(studentOrange.id);
+  const fetchedOrange2 = await db.getStudentById(studentOrange.id);
   assert.strictEqual(fetchedOrange2.eligibility.lessons_done, 24);
   assert.strictEqual(fetchedOrange2.eligibility.classes_met, true, 'Should meet 24 classes requirement');
   assert.strictEqual(fetchedOrange2.eligibility.eligible, true, 'Should now be eligible for 7th Gup (Orange Tag Belt)');
   assert.strictEqual(fetchedOrange2.eligibility.next_rank, '7th Gup (Orange Tag Belt)');
 
   // Student 2: 1st Gup (Red Tag Belt) needing 60 classes and 6 months for Cho Dan Bo
-  const studentRedTag = db.createStudent({
+  const studentRedTag = await db.createStudent({
     name: 'Maya Lin',
     dob: '2000-08-12',
     address: '22 Dojo Lane',
@@ -293,7 +293,7 @@ test('Database: Gup Belt System and Minimum Classes Requirements Check', () => {
     last_graded: '2026-01-01'
   });
 
-  const fetchedRedTag = db.getStudentById(studentRedTag.id);
+  const fetchedRedTag = await db.getStudentById(studentRedTag.id);
   assert.strictEqual(fetchedRedTag.eligibility.lessons_required, 60);
   assert.strictEqual(fetchedRedTag.eligibility.months_required, 6);
   assert.strictEqual(fetchedRedTag.eligibility.next_rank, 'Cho Dan Bo (Blue Belt - Black Belt Candidate)');

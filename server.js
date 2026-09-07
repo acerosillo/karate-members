@@ -6,7 +6,13 @@ const crypto = require('node:crypto');
 const { createDatabase } = require('./db.js');
 
 const PORT = process.env.PORT || 3000;
-const db = createDatabase();
+// createDatabase() is async (it talks to a real DB connection - either a
+// local file or a hosted Turso database), so kick it off once here and let
+// each request await the same promise before touching `db`.
+const dbPromise = createDatabase();
+dbPromise.catch(err => {
+  console.error('❌ Failed to initialize the database:', err.message);
+});
 const PUBLIC_DIR = path.join(__dirname, 'public');
 
 const MIME_TYPES = {
@@ -182,6 +188,8 @@ const server = http.createServer(async (req, res) => {
   }
 
   try {
+    const db = await dbPromise;
+
     // ==========================================
     // API ROUTES
     // ==========================================
@@ -195,14 +203,14 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/auth/status' && method === 'GET') {
         const cookies = parseCookies(req);
         return sendJSON(res, {
-          configured: db.isAuthConfigured(),
+          configured: await db.isAuthConfigured(),
           authenticated: isValidSession(cookies[SESSION_COOKIE_NAME])
         });
       }
 
       // POST /api/auth/setup (first-run only — creates the single dojo login)
       if (pathname === '/api/auth/setup' && method === 'POST') {
-        if (db.isAuthConfigured()) {
+        if (await db.isAuthConfigured()) {
           return sendError(res, 'Login has already been set up', 400);
         }
         const body = await parseBody(req);
@@ -210,7 +218,7 @@ const server = http.createServer(async (req, res) => {
         if (!username || !body.password || body.password.length < 6) {
           return sendError(res, 'Username and a password of at least 6 characters are required', 400);
         }
-        db.setupAuth(username, body.password);
+        await db.setupAuth(username, body.password);
         const token = createSession();
         setSessionCookie(req, res, token);
         return sendJSON(res, { success: true });
@@ -218,12 +226,12 @@ const server = http.createServer(async (req, res) => {
 
       // POST /api/auth/login
       if (pathname === '/api/auth/login' && method === 'POST') {
-        if (!db.isAuthConfigured()) {
+        if (!(await db.isAuthConfigured())) {
           return sendError(res, 'Login has not been set up yet', 400);
         }
         const body = await parseBody(req);
         const username = (body.username || '').trim();
-        if (!db.verifyCredentials(username, body.password || '')) {
+        if (!(await db.verifyCredentials(username, body.password || ''))) {
           return sendError(res, 'Invalid username or password', 401);
         }
         const token = createSession();
@@ -249,7 +257,7 @@ const server = http.createServer(async (req, res) => {
         if (!body.currentPassword || !body.newPassword || body.newPassword.length < 6) {
           return sendError(res, 'Current password and a new password (min 6 characters) are required', 400);
         }
-        const result = db.changePassword(body.currentPassword, body.newPassword);
+        const result = await db.changePassword(body.currentPassword, body.newPassword);
         if (!result.success) return sendError(res, result.message, 400);
         return sendJSON(res, { success: true });
       }
@@ -278,7 +286,7 @@ const server = http.createServer(async (req, res) => {
         if (!firstName || !associationNo) {
           return sendError(res, 'First name and association number are required', 400);
         }
-        const student = db.findStudentForLogin(firstName, associationNo);
+        const student = await db.findStudentForLogin(firstName, associationNo);
         if (!student) {
           return sendError(res, 'No matching student found. Check your first name and association number.', 401);
         }
@@ -300,7 +308,7 @@ const server = http.createServer(async (req, res) => {
         const cookies = parseCookies(req);
         const session = getValidStudentSession(cookies[STUDENT_SESSION_COOKIE_NAME]);
         if (!session) return sendError(res, 'Unauthorized — please log in', 401);
-        const summary = db.getStudentPortalSummary(session.studentId);
+        const summary = await db.getStudentPortalSummary(session.studentId);
         if (!summary) return sendError(res, 'Student record not found', 404);
         return sendJSON(res, summary);
       }
@@ -317,14 +325,14 @@ const server = http.createServer(async (req, res) => {
 
       // GET /api/stats
       if (pathname === '/api/stats' && method === 'GET') {
-        const stats = db.getDashboardStats();
+        const stats = await db.getDashboardStats();
         return sendJSON(res, stats);
       }
 
       // GET /api/students
       if (pathname === '/api/students' && method === 'GET') {
         const { search, rank, status } = parsedUrl.query;
-        const students = db.getStudents({ search, rank, status });
+        const students = await db.getStudents({ search, rank, status });
         return sendJSON(res, students);
       }
 
@@ -334,7 +342,7 @@ const server = http.createServer(async (req, res) => {
         if (!body.name || !body.dob || !body.tel) {
           return sendError(res, 'Name, Date of Birth, and Telephone are required.', 400);
         }
-        const created = db.createStudent(body);
+        const created = await db.createStudent(body);
         return sendJSON(res, created, 201);
       }
 
@@ -344,28 +352,29 @@ const server = http.createServer(async (req, res) => {
         const studentId = parseInt(studentMatch[1], 10);
 
         if (method === 'GET') {
-          const student = db.getStudentById(studentId);
+          const student = await db.getStudentById(studentId);
           if (!student) return sendError(res, 'Student not found', 404);
-          const history = db.getStudentAttendanceHistory(studentId);
-          const monthly = db.getStudentMonthlyBreakdown(studentId);
+          const history = await db.getStudentAttendanceHistory(studentId);
+          const monthly = await db.getStudentMonthlyBreakdown(studentId);
           return sendJSON(res, { ...student, attendance_history: history, monthly_breakdown: monthly });
         }
 
         if (method === 'PUT') {
           const body = await parseBody(req);
-          const updated = db.updateStudent(studentId, body);
+          const updated = await db.updateStudent(studentId, body);
           return sendJSON(res, updated);
         }
 
         if (method === 'DELETE') {
           const { permanent } = parsedUrl.query;
           if (permanent === 'true') {
-            const ok = db.deleteStudent(studentId);
+            const ok = await db.deleteStudent(studentId);
             return sendJSON(res, { success: ok, message: 'Student permanently deleted' });
           } else {
             // Soft delete/archive
-            const updated = db.updateStudent(studentId, {
-              ...db.getStudentById(studentId),
+            const existing = await db.getStudentById(studentId);
+            const updated = await db.updateStudent(studentId, {
+              ...existing,
               status: 'archived'
             });
             return sendJSON(res, { success: true, student: updated, message: 'Student archived' });
@@ -377,7 +386,7 @@ const server = http.createServer(async (req, res) => {
       if (pathname === '/api/register' && method === 'GET') {
         const date = parsedUrl.query.date || new Date().toISOString().slice(0, 10);
         const className = parsedUrl.query.class_name || 'Tuesday Class (7:00 PM - 8:00 PM)';
-        const register = db.getRegisterForSession(date, className);
+        const register = await db.getRegisterForSession(date, className);
         return sendJSON(res, {
           session_date: date,
           class_name: className,
@@ -391,7 +400,7 @@ const server = http.createServer(async (req, res) => {
         if (!body.student_id || !body.session_date) {
           return sendError(res, 'Student ID and session date are required', 400);
         }
-        const saved = db.saveAttendanceRecord(body);
+        const saved = await db.saveAttendanceRecord(body);
         return sendJSON(res, saved);
       }
 
@@ -401,20 +410,20 @@ const server = http.createServer(async (req, res) => {
         if (!body.session_date || !Array.isArray(body.records)) {
           return sendError(res, 'session_date and records array are required', 400);
         }
-        const saved = db.saveBulkAttendance(body.session_date, body.class_name || 'Tuesday Class (7:00 PM - 8:00 PM)', body.records);
+        const saved = await db.saveBulkAttendance(body.session_date, body.class_name || 'Tuesday Class (7:00 PM - 8:00 PM)', body.records);
         return sendJSON(res, { count: saved.length, records: saved });
       }
 
       // GET /api/monthly
       if (pathname === '/api/monthly' && method === 'GET') {
         const month = parsedUrl.query.month || null;
-        const counts = db.getMonthlyLessonCounts(month);
+        const counts = await db.getMonthlyLessonCounts(month);
         return sendJSON(res, counts);
       }
 
       // GET /api/missed-alerts
       if (pathname === '/api/missed-alerts' && method === 'GET') {
-        const report = db.getMissedLessonsReport();
+        const report = await db.getMissedLessonsReport();
         const alertsOnly = report.filter(s => s.is_missed_alert);
         return sendJSON(res, {
           total_alerts: alertsOnly.length,
@@ -425,14 +434,14 @@ const server = http.createServer(async (req, res) => {
 
       // GET /api/unpaid
       if (pathname === '/api/unpaid' && method === 'GET') {
-        const unpaid = db.getUnpaidTrainedSessions();
+        const unpaid = await db.getUnpaidTrainedSessions();
         return sendJSON(res, unpaid);
       }
 
       // GET /api/events
       if (pathname === '/api/events' && method === 'GET') {
         const { type, upcomingOnly } = parsedUrl.query;
-        const events = db.getEvents({
+        const events = await db.getEvents({
           type,
           upcomingOnly: upcomingOnly === 'true'
         });
@@ -445,7 +454,7 @@ const server = http.createServer(async (req, res) => {
         if (!body.title || !body.event_date) {
           return sendError(res, 'Title and event date are required', 400);
         }
-        const created = db.createEvent(body);
+        const created = await db.createEvent(body);
         return sendJSON(res, created, 201);
       }
 
@@ -454,18 +463,18 @@ const server = http.createServer(async (req, res) => {
       if (eventMatch) {
         const eventId = parseInt(eventMatch[1], 10);
         if (method === 'GET') {
-          const event = db.getEventById(eventId);
+          const event = await db.getEventById(eventId);
           if (!event) return sendError(res, 'Event not found', 404);
-          const participants = db.getEventParticipants(eventId);
+          const participants = await db.getEventParticipants(eventId);
           return sendJSON(res, { ...event, participants });
         }
         if (method === 'PUT') {
           const body = await parseBody(req);
-          const updated = db.updateEvent(eventId, body);
+          const updated = await db.updateEvent(eventId, body);
           return sendJSON(res, updated);
         }
         if (method === 'DELETE') {
-          const ok = db.deleteEvent(eventId);
+          const ok = await db.deleteEvent(eventId);
           return sendJSON(res, { success: ok });
         }
       }
@@ -475,14 +484,14 @@ const server = http.createServer(async (req, res) => {
       if (partMatch) {
         const eventId = parseInt(partMatch[1], 10);
         if (method === 'GET') {
-          const participants = db.getEventParticipants(eventId);
+          const participants = await db.getEventParticipants(eventId);
           return sendJSON(res, participants);
         }
         if (method === 'POST') {
           const body = await parseBody(req);
           if (!body.student_id) return sendError(res, 'Student ID required', 400);
-          db.addEventParticipant(eventId, body.student_id, body.status || 'registered', body.notes || '');
-          const participants = db.getEventParticipants(eventId);
+          await db.addEventParticipant(eventId, body.student_id, body.status || 'registered', body.notes || '');
+          const participants = await db.getEventParticipants(eventId);
           return sendJSON(res, participants);
         }
       }
@@ -491,14 +500,14 @@ const server = http.createServer(async (req, res) => {
       if (removePartMatch && method === 'DELETE') {
         const eventId = parseInt(removePartMatch[1], 10);
         const studentId = parseInt(removePartMatch[2], 10);
-        const ok = db.removeEventParticipant(eventId, studentId);
+        const ok = await db.removeEventParticipant(eventId, studentId);
         return sendJSON(res, { success: ok });
       }
 
       // GET /api/candidates
       if (pathname === '/api/candidates' && method === 'GET') {
         const targetDate = parsedUrl.query.date || null;
-        const candidates = db.getGradingCandidates(targetDate);
+        const candidates = await db.getGradingCandidates(targetDate);
         return sendJSON(res, candidates);
       }
 
@@ -509,7 +518,7 @@ const server = http.createServer(async (req, res) => {
         let csvContent = '';
 
         if (type === 'students') {
-          const students = db.getStudents({ status: 'all' });
+          const students = await db.getStudents({ status: 'all' });
           csvContent = [
             ['ID', 'Name', 'DOB', 'Gender', 'Tel', 'Address', 'Association Number', 'Rank', 'Membership Start', 'Membership End', 'Last Graded', 'Due Testing', 'Status', 'Total Attended', 'Total Missed'].map(escapeCSV).join(','),
             ...students.map(s => [
@@ -517,7 +526,7 @@ const server = http.createServer(async (req, res) => {
             ].map(escapeCSV).join(','))
           ].join('\r\n');
         } else if (type === 'monthly') {
-          const counts = db.getMonthlyLessonCounts();
+          const counts = await db.getMonthlyLessonCounts();
           csvContent = [
             ['Student ID', 'Student Name', 'Rank', 'Association No', 'Tel', 'Month', 'Attended Lessons', 'Total Paid (£)', 'Unpaid Lessons'].map(escapeCSV).join(','),
             ...counts.map(c => [
@@ -525,7 +534,7 @@ const server = http.createServer(async (req, res) => {
             ].map(escapeCSV).join(','))
           ].join('\r\n');
         } else if (type === 'missed') {
-          const missed = db.getMissedLessonsReport();
+          const missed = await db.getMissedLessonsReport();
           csvContent = [
             ['Student ID', 'Student Name', 'Rank', 'Tel', 'Total Missed Lessons', 'Consecutive Missed', 'Alert Flagged (>5)', 'Last Attended Date'].map(escapeCSV).join(','),
             ...missed.map(m => [
@@ -585,4 +594,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, db };
+module.exports = { server, dbPromise };
