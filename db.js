@@ -701,6 +701,18 @@ async function createDatabase(pathOrUrl, authToken) {
       };
     },
 
+    async getUpcomingEventsForStudent(studentId) {
+      const events = await this.getEvents({ upcomingOnly: true });
+      const participantRows = await all(`
+        SELECT event_id FROM event_participants WHERE student_id = ?
+      `, [studentId]);
+      const registeredEventIds = new Set(participantRows.map(r => r.event_id));
+      return events.map(e => ({
+        ...e,
+        is_registered: registeredEventIds.has(e.id)
+      }));
+    },
+
     // ==========================================
     // EVENTS & REMINDERS
     // ==========================================

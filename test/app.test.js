@@ -30,7 +30,7 @@ test('Database: Student registration and profile fields', async () => {
   // Update student rank
   const updated = await db.updateStudent(newStudent.id, {
     ...newStudent,
-    rank: '1st (Brown)',
+    rank: '1st Kyu (Brown)',
     last_graded: '2026-10-15',
     due_testing: '2027-10-15'
   });

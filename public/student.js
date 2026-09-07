@@ -146,6 +146,17 @@ async function initStudentPortalPage() {
     return;
   }
 
+  // Events are shown on a best-effort basis - if this fails, the rest of
+  // the portal (already rendered above) still works fine.
+  try {
+    const eventsRes = await fetch(`${API_BASE}/student/events`);
+    if (eventsRes.ok) {
+      renderStudentEvents(await eventsRes.json());
+    }
+  } catch (err) {
+    console.error('Failed to load upcoming events:', err);
+  }
+
   document.getElementById('btn-portal-logout').addEventListener('click', async () => {
     try {
       await fetch(`${API_BASE}/student-auth/logout`, { method: 'POST' });
@@ -218,4 +229,50 @@ function renderStudentPortal(student) {
       <td>${m.unpaid_lessons ? `<span class="pill pill-unpaid" style="font-size: 0.72rem;">${m.unpaid_lessons}</span>` : '0'}</td>
     </tr>
   `).join('');
+}
+
+function renderStudentEvents(events) {
+  const grid = document.getElementById('portal-events-grid');
+
+  if (!events || events.length === 0) {
+    grid.innerHTML = '<p style="color: var(--text-muted);">No upcoming gradings or events scheduled right now.</p>';
+    return;
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  grid.innerHTML = events.map(event => {
+    const eventDate = new Date(event.event_date);
+    const diffDays = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+    let countdownText = `${diffDays} days away`;
+    if (diffDays === 0) countdownText = 'Happening Today!';
+    else if (diffDays === 1) countdownText = 'Tomorrow!';
+
+    let typeBadgeClass = 'type-grading';
+    let typeLabel = '🥋 Grading';
+    if (event.event_type === 'competition') { typeBadgeClass = 'type-competition'; typeLabel = '🏆 Championship'; }
+    else if (event.event_type === 'seminar') { typeBadgeClass = 'type-seminar'; typeLabel = '📚 Seminar'; }
+
+    return `
+      <div class="event-card">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="event-type-badge ${typeBadgeClass}">${typeLabel}</span>
+          <span class="countdown-badge">${countdownText}</span>
+        </div>
+
+        <h3 style="color: #fff; font-size: 1.05rem;">${escapeHTML(event.title)}</h3>
+
+        <div style="font-size: 0.82rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 0.35rem;">
+          <div>📅 <strong>Date:</strong> ${formatDate(event.event_date)} ${event.event_time ? `• ${escapeHTML(event.event_time)}` : ''}</div>
+          <div>📍 <strong>Venue:</strong> ${escapeHTML(event.location || 'Honbu Dojo')}</div>
+          ${event.description ? `<div style="margin-top: 0.35rem; color: var(--text-main); font-size: 0.8rem; background: rgba(0,0,0,0.2); padding: 0.6rem; border-radius: var(--radius-sm);">${escapeHTML(event.description)}</div>` : ''}
+        </div>
+
+        ${event.is_registered
+          ? '<span class="badge-eligible" style="margin-top: 0.5rem; align-self: flex-start;">✓ You\'re Registered</span>'
+          : ''}
+      </div>
+    `;
+  }).join('');
 }

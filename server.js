@@ -313,10 +313,20 @@ const server = http.createServer(async (req, res) => {
         return sendJSON(res, summary);
       }
 
+      // GET /api/student/events — upcoming gradings/competitions/seminars,
+      // flagged with whether this student is registered for each
+      if (pathname === '/api/student/events' && method === 'GET') {
+        const cookies = parseCookies(req);
+        const session = getValidStudentSession(cookies[STUDENT_SESSION_COOKIE_NAME]);
+        if (!session) return sendError(res, 'Unauthorized — please log in', 401);
+        const events = await db.getUpcomingEventsForStudent(session.studentId);
+        return sendJSON(res, events);
+      }
+
       // ------------------------------------------
       // LOGIN GATE — every other /api/* route requires a valid admin session
       // ------------------------------------------
-      if (!pathname.startsWith('/api/auth/') && !pathname.startsWith('/api/student-auth/') && pathname !== '/api/student/me') {
+      if (!pathname.startsWith('/api/auth/') && !pathname.startsWith('/api/student-auth/') && !pathname.startsWith('/api/student/')) {
         const cookies = parseCookies(req);
         if (!isValidSession(cookies[SESSION_COOKIE_NAME])) {
           return sendError(res, 'Unauthorized — please log in', 401);
