@@ -89,13 +89,13 @@ const GUP_REQUIREMENTS = {
   '1st Gup (Red Tag Belt)': {
     shortRank: '1st Gup',
     beltName: 'Red Tag Belt',
-    nextRank: 'Cho Dan Bo (Blue Belt - Black Belt Candidate)',
+    nextRank: 'Cho Dan Bo (Blue Belt)',
     minTimeWeeks: 24,
     minTimeMonths: 6,
     minClasses: 60,
     timeText: '6 months'
   },
-  'Cho Dan Bo (Blue Belt - Black Belt Candidate)': {
+  'Cho Dan Bo (Blue Belt)': {
     shortRank: 'Cho Dan Bo',
     beltName: 'Blue Belt (Black Belt Candidate)',
     nextRank: '1st Dan (Black Belt)',

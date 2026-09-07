@@ -296,5 +296,5 @@ test('Database: Gup Belt System and Minimum Classes Requirements Check', async (
   const fetchedRedTag = await db.getStudentById(studentRedTag.id);
   assert.strictEqual(fetchedRedTag.eligibility.lessons_required, 60);
   assert.strictEqual(fetchedRedTag.eligibility.months_required, 6);
-  assert.strictEqual(fetchedRedTag.eligibility.next_rank, 'Cho Dan Bo (Blue Belt - Black Belt Candidate)');
+  assert.strictEqual(fetchedRedTag.eligibility.next_rank, 'Cho Dan Bo (Blue Belt)');
 });
