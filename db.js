@@ -180,6 +180,30 @@ function evaluateEligibility(student) {
   };
 }
 
+// Belt progression, lowest to highest, used to sort students/register by
+// rank rather than alphabetically (which would scatter belts randomly).
+const RANK_ORDER = [
+  ...Object.keys(GUP_REQUIREMENTS),
+  '1st Dan (Black Belt)',
+  '2nd Dan (Black Belt)',
+  '3rd Dan (Black Belt)'
+];
+
+// Builds a "CASE <column> WHEN ... THEN <position> ELSE 0 END" SQL fragment
+// (plus its bound args, in the order they appear in that fragment) that
+// ranks belts from 1 (lowest, white belt) to N (highest, 3rd Dan). Used with
+// ORDER BY ... DESC so the highest rank comes first; any rank string not in
+// RANK_ORDER (e.g. old/custom data) gets 0, so it always sorts last.
+function rankOrderClause(column) {
+  const whens = RANK_ORDER.map(() => 'WHEN ? THEN ?').join(' ');
+  const args = [];
+  RANK_ORDER.forEach((rank, i) => args.push(rank, i + 1));
+  return {
+    sql: `CASE ${column} ${whens} ELSE 0 END`,
+    args
+  };
+}
+
 // Turns a plain filesystem path into the "file:" URL form @libsql/client
 // expects, using forward slashes so Windows drive-letter paths work too
 // (e.g. "C:\foo\karate.db" -> "file:C:/foo/karate.db").
@@ -362,7 +386,10 @@ async function createDatabase(pathOrUrl, authToken) {
         params.push(queryTerm, queryTerm, queryTerm, queryTerm);
       }
 
-      sql += ' ORDER BY s.name ASC';
+      const rankOrder = rankOrderClause('s.rank');
+      sql += ` ORDER BY ${rankOrder.sql} DESC, s.name ASC`;
+      params.push(...rankOrder.args);
+
       const rows = await all(sql, params);
       return rows.map(r => ({
         ...r,
@@ -457,6 +484,7 @@ async function createDatabase(pathOrUrl, authToken) {
     // ATTENDANCE & REGISTER
     // ==========================================
     async getRegisterForSession(sessionDate, className = 'Regular Class') {
+      const rankOrder = rankOrderClause('s.rank');
       return all(`
         SELECT
           s.id as student_id,
@@ -478,8 +506,8 @@ async function createDatabase(pathOrUrl, authToken) {
         FROM students s
         LEFT JOIN attendance a ON s.id = a.student_id AND a.session_date = ? AND a.class_name = ?
         WHERE s.status = 'active'
-        ORDER BY s.name ASC
-      `, [sessionDate, sessionDate, className]);
+        ORDER BY ${rankOrder.sql} DESC, s.name ASC
+      `, [sessionDate, sessionDate, className, ...rankOrder.args]);
     },
 
     async saveAttendanceRecord({ student_id, session_date, class_name = 'Regular Class', status = 'present', paid = 0, payment_method = null, amount_paid = 0.0, notes = '' }) {
