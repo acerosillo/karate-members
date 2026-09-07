@@ -101,7 +101,7 @@ function getBeltClass(rank) {
   if (!rank) return 'belt-10-gup';
   const cleanRank = rank.toLowerCase();
   
-  if (cleanRank.includes('10th gup') || cleanRank.includes('10th kyu') || cleanRank.includes('white belt')) return 'belt-10-gup';
+  if (cleanRank.includes('10th gup') || cleanRank.includes('10th') || cleanRank.includes('white belt')) return 'belt-10-gup';
   if (cleanRank.includes('9th gup') || cleanRank.includes('black band')) return 'belt-9-gup';
   if (cleanRank.includes('8th gup') || (cleanRank.includes('orange') && !cleanRank.includes('tag'))) return 'belt-8-gup';
   if (cleanRank.includes('7th gup') || (cleanRank.includes('orange') && cleanRank.includes('tag'))) return 'belt-7-gup';
@@ -885,7 +885,7 @@ function openStudentModal(student = null) {
   nextYear.setFullYear(nextYear.getFullYear() + 1);
   document.getElementById('student-mem-end').value = student ? student.membership_end : nextYear.toISOString().slice(0, 10);
 
-  document.getElementById('student-rank').value = student ? student.rank : '10th Kyu (White)';
+  document.getElementById('student-rank').value = student ? student.rank : '10th (White)';
   document.getElementById('student-last-graded').value = student ? (student.last_graded || '') : '';
   document.getElementById('student-due-testing').value = student ? (student.due_testing || '') : '';
   document.getElementById('student-notes').value = student ? (student.notes || '') : '';
@@ -1436,7 +1436,7 @@ function renderEventsGrid() {
     card.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center;">
         <span class="event-type-badge ${typeBadgeClass}">
-          ${event.event_type === 'grading' ? '🥋 Kyu / Dan Grading' : event.event_type === 'competition' ? '🏆 Championship' : '📚 Seminar'}
+          ${event.event_type === 'grading' ? '🥋 Dan Grading' : event.event_type === 'competition' ? '🏆 Championship' : '📚 Seminar'}
         </span>
         <span class="countdown-badge">${countdownText}</span>
       </div>
