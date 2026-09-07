@@ -248,6 +248,7 @@ const SCHEMA_STATEMENTS = [
     due_testing TEXT,
     notes TEXT,
     status TEXT DEFAULT 'active',
+    photo TEXT,
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
   )`,
   `CREATE TABLE IF NOT EXISTS attendance (
@@ -348,10 +349,13 @@ async function createDatabase(pathOrUrl, authToken) {
     await client.execute(statement);
   }
 
-  // Migration: add gender column for databases created before this field existed
+  // Migrations: add columns for databases created before these fields existed
   const studentColumns = await all('PRAGMA table_info(students)');
   if (!studentColumns.some(col => col.name === 'gender')) {
     await client.execute('ALTER TABLE students ADD COLUMN gender TEXT');
+  }
+  if (!studentColumns.some(col => col.name === 'photo')) {
+    await client.execute('ALTER TABLE students ADD COLUMN photo TEXT');
   }
 
   return {
@@ -419,8 +423,8 @@ async function createDatabase(pathOrUrl, authToken) {
         INSERT INTO students (
           name, dob, gender, address, tel, association_no,
           membership_start, membership_end, rank,
-          last_graded, due_testing, notes, status
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          last_graded, due_testing, notes, status, photo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `, [
         data.name || '',
         data.dob || '',
@@ -434,7 +438,8 @@ async function createDatabase(pathOrUrl, authToken) {
         data.last_graded || null,
         data.due_testing || null,
         data.notes || '',
-        data.status || 'active'
+        data.status || 'active',
+        data.photo || null
       ]);
       return this.getStudentById(result.lastInsertRowid);
     },
@@ -454,7 +459,8 @@ async function createDatabase(pathOrUrl, authToken) {
           last_graded = ?,
           due_testing = ?,
           notes = ?,
-          status = ?
+          status = ?,
+          photo = ?
         WHERE id = ?
       `, [
         data.name || '',
@@ -470,6 +476,7 @@ async function createDatabase(pathOrUrl, authToken) {
         data.due_testing || null,
         data.notes || '',
         data.status || 'active',
+        data.photo || null,
         id
       ]);
       return this.getStudentById(id);
@@ -711,6 +718,7 @@ async function createDatabase(pathOrUrl, authToken) {
       return {
         id: student.id,
         name: student.name,
+        photo: student.photo,
         rank: student.rank,
         association_no: student.association_no,
         membership_start: student.membership_start,

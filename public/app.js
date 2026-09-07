@@ -3,6 +3,7 @@
 // ==========================================
 
 const API_BASE = '/api';
+const PLACEHOLDER_PHOTO = '/images/student-placeholder.svg';
 
 const state = {
   activeTab: 'register',
@@ -717,6 +718,77 @@ function initStudentsTab() {
   document.getElementById('filter-status').addEventListener('change', loadStudents);
 
   document.getElementById('student-form').addEventListener('submit', handleStudentFormSubmit);
+
+  document.getElementById('student-photo-input').addEventListener('change', handleStudentPhotoSelected);
+  document.getElementById('btn-remove-student-photo').addEventListener('click', () => setStudentPhotoPreview(null));
+}
+
+// Roughly converts a base64 data: URL's length to the byte size it decodes to.
+function estimateDataUrlBytes(dataUrl) {
+  const base64Length = dataUrl.length - dataUrl.indexOf(',') - 1;
+  return Math.ceil(base64Length * 3 / 4);
+}
+
+// Resizes/compresses a chosen image file down to a small square thumbnail -
+// crops to a centered square, scales it down, and re-encodes as JPEG,
+// stepping the quality down further if it's still bigger than targetBytes -
+// so a multi-MB phone photo never gets stored anywhere near full size.
+function resizeImageToThumbnail(file, { maxSize = 200, targetBytes = 60 * 1024 } = {}) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read the selected file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not read the selected image'));
+      img.onload = () => {
+        // Crop to a centered square, then scale down to maxSize.
+        const side = Math.min(img.width, img.height);
+        const sx = (img.width - side) / 2;
+        const sy = (img.height - side) / 2;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = maxSize;
+        canvas.height = maxSize;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, sx, sy, side, side, 0, 0, maxSize, maxSize);
+
+        let quality = 0.82;
+        let dataUrl = canvas.toDataURL('image/jpeg', quality);
+        while (estimateDataUrlBytes(dataUrl) > targetBytes && quality > 0.35) {
+          quality -= 0.12;
+          dataUrl = canvas.toDataURL('image/jpeg', quality);
+        }
+
+        resolve(dataUrl);
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleStudentPhotoSelected(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+
+  try {
+    const dataUrl = await resizeImageToThumbnail(file);
+    setStudentPhotoPreview(dataUrl);
+  } catch (err) {
+    console.error('Photo processing failed:', err);
+    showToast('Could not process that image - please try a different file.', 'danger');
+  } finally {
+    e.target.value = ''; // allow re-selecting the same file later
+  }
+}
+
+function setStudentPhotoPreview(dataUrl) {
+  document.getElementById('student-photo-data').value = dataUrl || '';
+  const previewImg = document.getElementById('student-photo-preview');
+  const removeBtn = document.getElementById('btn-remove-student-photo');
+
+  previewImg.src = dataUrl || PLACEHOLDER_PHOTO;
+  removeBtn.style.display = dataUrl ? 'inline-flex' : 'none';
 }
 
 async function loadStudents() {
@@ -769,12 +841,15 @@ function renderStudentsGrid() {
     card.innerHTML = `
       <div class="belt-ribbon" style="background: ${beltColorHex};"></div>
       <div class="card-header-main">
-        <div class="student-name-group">
-          <h3>${escapeHTML(student.name)}</h3>
-          <div class="student-meta-assoc">
-            <span>🥋 Assoc: ${escapeHTML(student.association_no || 'None')}</span>
-            <span>Age: ${age || 'N/A'}</span>
-            <span>Sex: ${student.gender ? `<span>${student.gender === 'm' ? 'M' : student.gender === 'f' ? 'F' : escapeHTML(student.gender)}</span>` : ''}</span>
+        <div class="student-identity">
+          <img src="${escapeHTML(student.photo || PLACEHOLDER_PHOTO)}" class="student-avatar" alt="${escapeHTML(student.name)}">
+          <div class="student-name-group">
+            <h3>${escapeHTML(student.name)}</h3>
+            <div class="student-meta-assoc">
+              <span>🥋 Assoc: ${escapeHTML(student.association_no || 'None')}</span>
+              <span>Age: ${age || 'N/A'}</span>
+              <span>Sex: ${student.gender ? `<span>${student.gender === 'm' ? 'M' : student.gender === 'f' ? 'F' : escapeHTML(student.gender)}</span>` : ''}</span>
+            </div>
           </div>
         </div>
         <span class="belt-badge ${beltClass}">
@@ -891,6 +966,8 @@ function openStudentModal(student = null) {
   document.getElementById('student-notes').value = student ? (student.notes || '') : '';
   document.getElementById('student-status').value = student ? (student.status || 'active') : 'active';
 
+  setStudentPhotoPreview(student ? student.photo : null);
+
   document.getElementById('student-modal').style.display = 'flex';
 }
 
@@ -917,7 +994,8 @@ async function handleStudentFormSubmit(e) {
     last_graded: document.getElementById('student-last-graded').value || null,
     due_testing: document.getElementById('student-due-testing').value || null,
     notes: document.getElementById('student-notes').value.trim(),
-    status: document.getElementById('student-status').value
+    status: document.getElementById('student-status').value,
+    photo: document.getElementById('student-photo-data').value || null
   };
 
   try {

@@ -463,6 +463,18 @@
       </div>
       <form id="student-form" class="modal-form">
         <input type="hidden" id="student-id">
+        <input type="hidden" id="student-photo-data">
+
+        <div class="form-row" style="align-items: center;">
+          <div class="student-photo-picker">
+            <img id="student-photo-preview" class="student-avatar student-avatar-lg" src="/images/student-placeholder.svg" alt="Student photo preview">
+            <div class="student-photo-picker-actions">
+              <label for="student-photo-input" class="btn btn-outline btn-sm" style="cursor:pointer;">📷 Upload Photo</label>
+              <input type="file" id="student-photo-input" accept="image/png, image/jpeg, image/webp" style="display:none;">
+              <button type="button" class="btn btn-outline btn-sm" id="btn-remove-student-photo" style="display:none;">Remove</button>
+            </div>
+          </div>
+        </div>
 
         <div class="form-row">
           <div class="form-group col-8">

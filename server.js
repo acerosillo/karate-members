@@ -172,6 +172,24 @@ function escapeCSV(val) {
   return `"${str}"`;
 }
 
+// Student photos are stored as data: URLs directly in the database (Turso),
+// same as everything else - keeping them out of the app host's disk is the
+// whole point after the persistence issues we've already been through.
+// The client compresses to a ~60KB thumbnail before upload; this cap is a
+// generous safety ceiling (not the target) in case that's ever bypassed.
+const MAX_PHOTO_DATA_URL_LENGTH = 150 * 1024; // ~150KB of base64 text
+
+function validatePhoto(photo) {
+  if (photo === undefined || photo === null || photo === '') return null;
+  if (typeof photo !== 'string' || !/^data:image\/(png|jpe?g|webp);base64,/.test(photo)) {
+    return 'Photo must be a PNG, JPEG, or WebP image';
+  }
+  if (photo.length > MAX_PHOTO_DATA_URL_LENGTH) {
+    return 'Photo is too large - please use a smaller image';
+  }
+  return null;
+}
+
 const server = http.createServer(async (req, res) => {
   const parsedUrl = url.parse(req.url, true);
   const pathname = parsedUrl.pathname;
@@ -352,6 +370,8 @@ const server = http.createServer(async (req, res) => {
         if (!body.name || !body.dob || !body.tel) {
           return sendError(res, 'Name, Date of Birth, and Telephone are required.', 400);
         }
+        const photoError = validatePhoto(body.photo);
+        if (photoError) return sendError(res, photoError, 400);
         const created = await db.createStudent(body);
         return sendJSON(res, created, 201);
       }
@@ -371,6 +391,8 @@ const server = http.createServer(async (req, res) => {
 
         if (method === 'PUT') {
           const body = await parseBody(req);
+          const photoError = validatePhoto(body.photo);
+          if (photoError) return sendError(res, photoError, 400);
           const updated = await db.updateStudent(studentId, body);
           return sendJSON(res, updated);
         }

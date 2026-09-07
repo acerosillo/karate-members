@@ -5,6 +5,7 @@
 // ==========================================
 
 const API_BASE = '/api';
+const PLACEHOLDER_PHOTO = '/images/student-placeholder.svg';
 
 function escapeHTML(str) {
   if (str === null || str === undefined) return '';
@@ -171,6 +172,8 @@ function renderStudentPortal(student) {
   document.getElementById('portal-student-name').textContent = student.name || '';
   document.getElementById('portal-profile-name').textContent = student.name || '';
   document.getElementById('portal-profile-assoc').textContent = student.association_no || 'N/A';
+
+  document.getElementById('portal-profile-photo').src = student.photo || PLACEHOLDER_PHOTO;
 
   const beltClass = getBeltClass(student.rank);
   const badge = document.getElementById('portal-belt-badge');
