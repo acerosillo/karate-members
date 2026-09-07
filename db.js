@@ -1,6 +1,7 @@
 const { DatabaseSync } = require('node:sqlite');
 const path = require('node:path');
 const crypto = require('node:crypto');
+const fs = require('node:fs');
 
 // Gup Rank Progression & Minimum Classes / Time Requirements
 const GUP_REQUIREMENTS = {
@@ -179,7 +180,13 @@ function evaluateEligibility(student) {
   };
 }
 
-function createDatabase(dbFilePath = path.join(__dirname, 'karate.db')) {
+function createDatabase(dbFilePath = process.env.DB_PATH || path.join(__dirname, 'karate.db')) {
+  // Make sure the target directory exists (e.g. a freshly-mounted Render
+  // persistent disk) before SQLite tries to open/create the file in it.
+  const dir = path.dirname(dbFilePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
   const db = new DatabaseSync(dbFilePath);
 
   // Enable foreign keys
