@@ -52,6 +52,10 @@
   padding: 0;
 }
 
+html {
+  overflow-x: hidden;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-main);
@@ -59,12 +63,27 @@ body {
   min-height: 100vh;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  /* Nothing on this page should ever need to scroll horizontally at the
+     body level (wide tables/tabs scroll within their own containers) -
+     forbidding it outright, on both html and body, guards against mobile
+     browsers miscalculating their initial zoom around a nested
+     horizontally-scrollable element (a known real-device quirk that
+     doesn't always show up in desktop devtools' mobile emulation). */
+  overflow-x: hidden;
 }
 
 .app-container {
   max-width: 1440px;
   margin: 0 auto;
   padding: 1.5rem 2rem 4rem;
+  /* Hidden until the auth check confirms a logged-in session (app.js adds
+     .is-ready) - otherwise the dashboard briefly flashes before the login
+     overlay has a chance to appear. */
+  display: none;
+}
+
+.app-container.is-ready {
+  display: block;
 }
 
 /* ==========================================
@@ -1255,7 +1274,9 @@ select.form-control {
 
 .events-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  /* min(360px, 100%) instead of a bare 360px so the column can't force
+     overflow on narrow phone widths - it just becomes a single column. */
+  grid-template-columns: repeat(auto-fill, minmax(min(360px, 100%), 1fr));
   gap: 1.5rem;
 }
 

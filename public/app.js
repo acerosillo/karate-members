@@ -193,6 +193,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function initApp() {
+  document.querySelector('.app-container').classList.add('is-ready');
+
   initNavigation();
   initRegisterTab();
   initStudentsTab();
