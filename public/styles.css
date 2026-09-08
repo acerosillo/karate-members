@@ -1354,7 +1354,7 @@ select.form-control {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: #000000;
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -1599,6 +1599,16 @@ select.form-control {
   .col-8 {
     flex: 1 1 100%;
   }
+
+  .card-header-main {
+    flex-wrap: wrap;
+  }
+
+  .card-header-main .belt-badge {
+    display: block;
+    width: 100%;
+    margin-top: 0.5rem;
+  }
 }
 
 /* ==========================================
@@ -1717,7 +1727,7 @@ select.form-control {
 
 .portal-panel h3 {
   font-size: 1rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0;
   color: #fff;
 }
 
