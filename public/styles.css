@@ -1032,6 +1032,39 @@ select.form-control {
   color: #fff;
 }
 
+/* Mobile Register Table Toggle & Meta Styles */
+.mobile-only-toggle {
+  display: none;
+}
+
+.reg-mobile-meta {
+  display: none;
+}
+
+.th-short {
+  display: none;
+}
+
+.th-full {
+  display: inline;
+}
+
+.belt-badge-xs {
+  font-size: 0.68rem;
+  padding: 0.15rem 0.4rem;
+  gap: 0.3rem;
+  box-shadow: none;
+}
+
+.reg-meta-month {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 5px;
+  border-radius: var(--radius-sm);
+  white-space: nowrap;
+}
+
 /* ==========================================
    STUDENTS DIRECTORY GRID & CARDS
    ========================================== */
@@ -1665,6 +1698,141 @@ select.form-control {
     display: block;
     width: 100%;
     margin-top: 0.5rem;
+  }
+
+  /* Register Table Mobile Optimization: Prioritize First 3 Columns */
+  .mobile-only-toggle {
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .th-full {
+    display: none;
+  }
+
+  .th-short {
+    display: inline;
+  }
+
+  .reg-mobile-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-top: 0.3rem;
+    flex-wrap: wrap;
+  }
+
+  #register-table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  #register-table.show-all-columns {
+    table-layout: auto;
+    min-width: 720px;
+  }
+
+  /* Hide columns 4, 5, 6, 7 on mobile by default to keep first 3 columns visible */
+  #register-table:not(.show-all-columns) th:nth-child(n+4),
+  #register-table:not(.show-all-columns) td:nth-child(n+4) {
+    display: none;
+  }
+
+  /* Sizing for the first 3 columns on mobile */
+  #register-table:not(.show-all-columns) th:nth-child(1),
+  #register-table:not(.show-all-columns) td:nth-child(1) {
+    width: 44%;
+    padding: 0.65rem 0.45rem;
+  }
+
+  #register-table:not(.show-all-columns) th:nth-child(2),
+  #register-table:not(.show-all-columns) td:nth-child(2) {
+    width: 33%;
+    padding: 0.65rem 0.25rem;
+    text-align: center;
+  }
+
+  #register-table:not(.show-all-columns) th:nth-child(3),
+  #register-table:not(.show-all-columns) td:nth-child(3) {
+    width: 23%;
+    padding: 0.65rem 0.25rem;
+    text-align: center;
+  }
+
+  /* Pinned left column when full horizontal swipe is enabled */
+  #register-table.show-all-columns th:first-child,
+  #register-table.show-all-columns td:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+  }
+
+  #register-table.show-all-columns thead th:first-child {
+    background: #151d2c;
+  }
+
+  #register-table.show-all-columns tbody td:first-child {
+    background: var(--bg-surface);
+  }
+
+  .status-toggle-group {
+    display: flex;
+    width: 100%;
+    max-width: 128px;
+    margin: 0 auto;
+    padding: 2px;
+  }
+
+  .status-toggle-group .toggle-btn {
+    flex: 1 1 50%;
+    padding: 0.35rem 0.25rem;
+    font-size: 0.72rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .payment-btn {
+    padding: 0.35rem 0.45rem;
+    font-size: 0.72rem;
+    white-space: nowrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 88px;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .app-container {
+    padding: 0.6rem 0.35rem;
+  }
+
+  #register-table:not(.show-all-columns) th:nth-child(1),
+  #register-table:not(.show-all-columns) td:nth-child(1) {
+    width: 42%;
+    padding: 0.55rem 0.35rem;
+  }
+
+  #register-table:not(.show-all-columns) th:nth-child(2),
+  #register-table:not(.show-all-columns) td:nth-child(2) {
+    width: 34%;
+    padding: 0.55rem 0.2rem;
+  }
+
+  #register-table:not(.show-all-columns) th:nth-child(3),
+  #register-table:not(.show-all-columns) td:nth-child(3) {
+    width: 24%;
+    padding: 0.55rem 0.2rem;
+  }
+
+  .status-toggle-group .toggle-btn {
+    padding: 0.32rem 0.15rem;
+    font-size: 0.68rem;
+  }
+
+  .payment-btn {
+    padding: 0.32rem 0.25rem;
+    font-size: 0.68rem;
   }
 }
 

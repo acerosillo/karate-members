@@ -512,6 +512,16 @@ function initRegisterTab() {
   document.getElementById('reg-filter-unpaid').addEventListener('change', renderRegisterTable);
   document.getElementById('reg-filter-missed').addEventListener('change', renderRegisterTable);
   document.getElementById('reg-filter-archived')?.addEventListener('change', loadRegister);
+  document.getElementById('reg-filter-all-cols')?.addEventListener('change', (e) => {
+    const table = document.getElementById('register-table');
+    if (table) {
+      if (e.target.checked) {
+        table.classList.add('show-all-columns');
+      } else {
+        table.classList.remove('show-all-columns');
+      }
+    }
+  });
 }
 
 async function loadRegister() {
@@ -575,10 +585,24 @@ function renderRegisterTable() {
 
     tr.innerHTML = `
       <td>
-        <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
-          <strong style="color: ${isArchived ? 'var(--text-muted)' : '#fff'}; font-size: 0.95rem;">${escapeHTML(item.name)}</strong>
-          ${isArchived ? `<span class="badge-archived" title="Student is archived and removed from active register">Archived</span>` : ''}
-          ${isMissedAlert && !isArchived ? `<span class="badge-missed-alert" title="Student has missed ${item.total_missed} lessons!">⚠️ ${item.total_missed} Missed</span>` : ''}
+        <div class="reg-student-cell">
+          <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+            <strong style="color: ${isArchived ? 'var(--text-muted)' : '#fff'}; font-size: 0.95rem;">${escapeHTML(item.name)}</strong>
+            ${isArchived ? `<span class="badge-archived" title="Student is archived and removed from active register">Archived</span>` : ''}
+            ${isMissedAlert && !isArchived ? `<span class="badge-missed-alert" title="Student has missed ${item.total_missed} lessons!">⚠️ ${item.total_missed} Missed</span>` : ''}
+          </div>
+          <div class="reg-mobile-meta">
+            <span class="belt-badge ${beltClass} belt-badge-xs">
+              <span class="belt-strip"></span>
+              ${escapeHTML(item.rank || 'White')}
+            </span>
+            <span class="reg-meta-month">📅 ${item.current_month_lessons || 0}</span>
+            ${isArchived ? `
+              <button type="button" class="btn btn-success btn-xs" onclick="toggleStudentArchive(${item.student_id}, '${escapeHTML(item.name)}', 'active')" title="Reactivate student">↺</button>
+            ` : `
+              <button type="button" class="btn btn-outline btn-xs" onclick="toggleStudentArchive(${item.student_id}, '${escapeHTML(item.name)}', 'archived')" title="Archive student">📦</button>
+            `}
+          </div>
         </div>
       </td>
       <td>
