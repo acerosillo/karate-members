@@ -490,8 +490,11 @@ async function createDatabase(pathOrUrl, authToken) {
     // ==========================================
     // ATTENDANCE & REGISTER
     // ==========================================
-    async getRegisterForSession(sessionDate, className = 'Regular Class') {
+    async getRegisterForSession(sessionDate, className = 'Regular Class', includeArchived = false) {
       const rankOrder = rankOrderClause('s.rank');
+      const statusCondition = includeArchived
+        ? "(s.status = 'active' OR s.status = 'archived')"
+        : "(s.status = 'active' OR (a.id IS NOT NULL AND a.status != 'unrecorded'))";
       return all(`
         SELECT
           s.id as student_id,
@@ -512,7 +515,7 @@ async function createDatabase(pathOrUrl, authToken) {
           (SELECT COUNT(*) FROM attendance att WHERE att.student_id = s.id AND att.status = 'present' AND strftime('%Y-%m', att.session_date) = strftime('%Y-%m', ?)) as current_month_lessons
         FROM students s
         LEFT JOIN attendance a ON s.id = a.student_id AND a.session_date = ? AND a.class_name = ?
-        WHERE s.status = 'active'
+        WHERE ${statusCondition}
         ORDER BY ${rankOrder.sql} DESC, s.name ASC
       `, [sessionDate, sessionDate, className, ...rankOrder.args]);
     },

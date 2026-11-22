@@ -996,6 +996,42 @@ select.form-control {
   }
 }
 
+/* Archived badge & table styles */
+.badge-archived {
+  background: rgba(148, 163, 184, 0.16);
+  color: #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.data-table tbody tr.row-archived {
+  opacity: 0.8;
+  background: rgba(148, 163, 184, 0.04);
+}
+
+.btn-xs {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.74rem;
+  border-radius: var(--radius-sm);
+}
+
+.btn-success {
+  background: rgba(16, 185, 129, 0.16);
+  color: #34d399;
+  border-color: rgba(16, 185, 129, 0.35);
+}
+
+.btn-success:hover {
+  background: #10b981;
+  color: #fff;
+}
+
 /* ==========================================
    STUDENTS DIRECTORY GRID & CARDS
    ========================================== */

@@ -397,6 +397,17 @@ const server = http.createServer(async (req, res) => {
           return sendJSON(res, updated);
         }
 
+        if (method === 'PATCH') {
+          const body = await parseBody(req);
+          const existing = await db.getStudentById(studentId);
+          if (!existing) return sendError(res, 'Student not found', 404);
+          const updated = await db.updateStudent(studentId, {
+            ...existing,
+            ...body
+          });
+          return sendJSON(res, updated);
+        }
+
         if (method === 'DELETE') {
           const { permanent } = parsedUrl.query;
           if (permanent === 'true') {
@@ -414,11 +425,27 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
+      // Student status route: /api/students/:id/status
+      const statusMatch = pathname.match(/^\/api\/students\/(\d+)\/status$/);
+      if (statusMatch && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
+        const studentId = parseInt(statusMatch[1], 10);
+        const body = await parseBody(req);
+        const targetStatus = body.status === 'archived' ? 'archived' : 'active';
+        const existing = await db.getStudentById(studentId);
+        if (!existing) return sendError(res, 'Student not found', 404);
+        const updated = await db.updateStudent(studentId, {
+          ...existing,
+          status: targetStatus
+        });
+        return sendJSON(res, { success: true, student: updated, message: `Student status updated to ${targetStatus}` });
+      }
+
       // GET /api/register
       if (pathname === '/api/register' && method === 'GET') {
         const date = parsedUrl.query.date || new Date().toISOString().slice(0, 10);
         const className = parsedUrl.query.class_name || 'Tuesday Class (7:00 PM - 8:00 PM)';
-        const register = await db.getRegisterForSession(date, className);
+        const includeArchived = parsedUrl.query.include_archived === 'true';
+        const register = await db.getRegisterForSession(date, className, includeArchived);
         return sendJSON(res, {
           session_date: date,
           class_name: className,

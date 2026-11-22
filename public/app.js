@@ -485,7 +485,9 @@ function initRegisterTab() {
 
   document.getElementById('btn-mark-all-present').addEventListener('click', () => {
     state.register.students.forEach(item => {
-      item.attendance_status = 'present';
+      if (item.student_status !== 'archived') {
+        item.attendance_status = 'present';
+      }
     });
     renderRegisterTable();
     updateRegisterPills();
@@ -493,7 +495,7 @@ function initRegisterTab() {
 
   document.getElementById('btn-mark-all-paid').addEventListener('click', () => {
     state.register.students.forEach(item => {
-      if (item.attendance_status === 'present') {
+      if (item.student_status !== 'archived' && item.attendance_status === 'present') {
         item.paid = 1;
         if (!item.amount_paid || item.amount_paid === 0) item.amount_paid = 10.0;
         if (!item.payment_method) item.payment_method = 'Cash';
@@ -509,14 +511,17 @@ function initRegisterTab() {
   document.getElementById('reg-search').addEventListener('input', renderRegisterTable);
   document.getElementById('reg-filter-unpaid').addEventListener('change', renderRegisterTable);
   document.getElementById('reg-filter-missed').addEventListener('change', renderRegisterTable);
+  document.getElementById('reg-filter-archived')?.addEventListener('change', loadRegister);
 }
 
 async function loadRegister() {
   const tbody = document.getElementById('register-tbody');
   tbody.innerHTML = '<tr><td colspan="7" class="text-center loading-cell">Loading class register...</td></tr>';
 
+  const includeArchived = document.getElementById('reg-filter-archived')?.checked ? 'true' : 'false';
+
   try {
-    const res = await fetch(`${API_BASE}/register?date=${state.register.date}&class_name=${encodeURIComponent(state.register.class_name)}`);
+    const res = await fetch(`${API_BASE}/register?date=${state.register.date}&class_name=${encodeURIComponent(state.register.class_name)}&include_archived=${includeArchived}`);
     const data = await res.json();
     state.register.students = data.students || [];
     renderRegisterTable();
@@ -552,7 +557,7 @@ function renderRegisterTable() {
   });
 
   if (filtered.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="text-center loading-cell">No students match the current filters.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center loading-cell">No students match the current filters.</td></tr>';
     return;
   }
 
@@ -560,37 +565,50 @@ function renderRegisterTable() {
     const tr = document.createElement('tr');
     const isMissedAlert = item.total_missed >= 5;
     const isUnpaidAlert = item.attendance_status === 'present' && (!item.paid || item.paid === 0);
+    const isArchived = item.student_status === 'archived';
 
     if (isMissedAlert) tr.classList.add('row-missed-alert');
     if (isUnpaidAlert) tr.classList.add('row-unpaid-alert');
+    if (isArchived) tr.classList.add('row-archived');
 
     const beltClass = getBeltClass(item.rank);
 
     tr.innerHTML = `
       <td>
-        <strong style="color: #fff; font-size: 0.95rem;">${escapeHTML(item.name)}</strong>
-        ${isMissedAlert ? `<span class="badge-missed-alert" title="Student has missed ${item.total_missed} lessons!">⚠️ ${item.total_missed} Missed</span>` : ''}
+        <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+          <strong style="color: ${isArchived ? 'var(--text-muted)' : '#fff'}; font-size: 0.95rem;">${escapeHTML(item.name)}</strong>
+          ${isArchived ? `<span class="badge-archived" title="Student is archived and removed from active register">Archived</span>` : ''}
+          ${isMissedAlert && !isArchived ? `<span class="badge-missed-alert" title="Student has missed ${item.total_missed} lessons!">⚠️ ${item.total_missed} Missed</span>` : ''}
+        </div>
       </td>
       <td>
-        <div class="status-toggle-group">
-          <button type="button" class="toggle-btn ${item.attendance_status === 'present' ? 'active-present' : ''}" data-student-id="${item.student_id}" data-status="present">
-            ✓ Present
+        ${isArchived ? `
+          <span style="color: var(--text-dim); font-size: 0.8rem; font-style: italic;">Inactive</span>
+        ` : `
+          <div class="status-toggle-group">
+            <button type="button" class="toggle-btn ${item.attendance_status === 'present' ? 'active-present' : ''}" data-student-id="${item.student_id}" data-status="present">
+              ✓ Present
+            </button>
+            <button type="button" class="toggle-btn ${item.attendance_status === 'absent' ? 'active-absent' : ''}" data-student-id="${item.student_id}" data-status="absent">
+              ✕ Absent
+            </button>
+          </div>
+        `}
+      </td>
+      <td>
+        ${isArchived ? `
+          <span style="color: var(--text-dim); font-size: 0.82rem;">—</span>
+        ` : `
+          <button type="button" class="payment-btn ${item.attendance_status !== 'present' ? 'is-disabled' : item.paid ? 'is-paid' : 'is-unpaid'}"
+            data-student-id="${item.student_id}" ${item.attendance_status !== 'present' ? 'disabled' : ''}>
+            ${item.attendance_status !== 'present' ? '—' : item.paid ? '✓ Paid' : '⚠️ Unpaid'}
           </button>
-          <button type="button" class="toggle-btn ${item.attendance_status === 'absent' ? 'active-absent' : ''}" data-student-id="${item.student_id}" data-status="absent">
-            ✕ Absent
-          </button>
-        </div>
+        `}
       </td>
       <td>
         <span class="pill pill-present" style="font-size: 0.76rem;">
           ${item.current_month_lessons || 0} lessons
         </span>
-      </td>
-      <td>
-        <button type="button" class="payment-btn ${item.attendance_status !== 'present' ? 'is-disabled' : item.paid ? 'is-paid' : 'is-unpaid'}"
-          data-student-id="${item.student_id}" ${item.attendance_status !== 'present' ? 'disabled' : ''}>
-          ${item.attendance_status !== 'present' ? '—' : item.paid ? '✓ Paid' : '⚠️ Unpaid'}
-        </button>
       </td>
       <td>
         <span class="belt-badge ${beltClass}">
@@ -599,6 +617,17 @@ function renderRegisterTable() {
         </span>
       </td>
       <td><span style="font-family: monospace; font-size: 0.8rem; color: var(--text-muted);">${escapeHTML(item.association_no || 'N/A')}</span></td>
+      <td>
+        ${isArchived ? `
+          <button type="button" class="btn btn-success btn-xs" onclick="toggleStudentArchive(${item.student_id}, '${escapeHTML(item.name)}', 'active')" title="Untoggle: return student to daily register">
+            <span>↺</span> Reactivate
+          </button>
+        ` : `
+          <button type="button" class="btn btn-outline btn-xs" onclick="toggleStudentArchive(${item.student_id}, '${escapeHTML(item.name)}', 'archived')" title="Archive student (removes from register, preserves details)">
+            <span>📦</span> Archive
+          </button>
+        `}
+      </td>
     `;
 
     tbody.appendChild(tr);
@@ -675,14 +704,16 @@ async function saveRegister() {
     const payload = {
       session_date: state.register.date,
       class_name: state.register.class_name,
-      records: state.register.students.map(s => ({
-        student_id: s.student_id,
-        status: s.attendance_status || 'present',
-        paid: s.paid ? 1 : 0,
-        payment_method: s.payment_method || 'Cash',
-        amount_paid: Number(s.amount_paid) || 0,
-        notes: s.attendance_notes || ''
-      }))
+      records: state.register.students
+        .filter(s => s.student_status !== 'archived' || (s.attendance_status && s.attendance_status !== 'unrecorded'))
+        .map(s => ({
+          student_id: s.student_id,
+          status: s.attendance_status || 'present',
+          paid: s.paid ? 1 : 0,
+          payment_method: s.payment_method || 'Cash',
+          amount_paid: Number(s.amount_paid) || 0,
+          notes: s.attendance_notes || ''
+        }))
     };
 
     const res = await fetch(`${API_BASE}/register/bulk`, {
@@ -834,7 +865,8 @@ function renderStudentsGrid() {
   state.students.forEach(student => {
     const card = document.createElement('div');
     const isMissedAlert = (student.total_missed || 0) >= 5;
-    card.className = `student-card ${isMissedAlert ? 'has-missed-alert' : ''}`;
+    const isArchived = student.status === 'archived';
+    card.className = `student-card ${isMissedAlert ? 'has-missed-alert' : ''} ${isArchived ? 'is-archived-card' : ''}`;
 
     const beltClass = getBeltClass(student.rank);
     const beltColorHex = getBeltColorHex(beltClass);
@@ -846,7 +878,10 @@ function renderStudentsGrid() {
         <div class="student-identity">
           <img src="${escapeHTML(student.photo || PLACEHOLDER_PHOTO)}" class="student-avatar" alt="${escapeHTML(student.name)}">
           <div class="student-name-group">
-            <h3>${escapeHTML(student.name)}</h3>
+            <div style="display: flex; align-items: center; gap: 0.45rem; flex-wrap: wrap;">
+              <h3 style="margin: 0;">${escapeHTML(student.name)}</h3>
+              ${isArchived ? `<span class="badge-archived">Archived</span>` : ''}
+            </div>
             <div class="student-meta-assoc">
               <span>🥋 Assoc: ${escapeHTML(student.association_no || 'None')}</span>
               <span>Age: ${age || 'N/A'}</span>
@@ -933,9 +968,21 @@ function renderStudentsGrid() {
           <button class="btn btn-outline btn-sm" onclick="editStudent(${student.id})">
             <span>✏️</span> Edit
           </button>
-          <button class="btn btn-danger btn-sm" onclick="deleteStudent(${student.id}, '${escapeHTML(student.name)}', '${student.status}')" title="${student.status === 'archived' ? 'Permanently delete this member' : 'Archive this member'}">
-            <span>🗑️</span>${student.status === 'archived' ? ' Delete Permanently' : ''}
-          </button>
+          ${isArchived ? `
+            <button class="btn btn-success btn-sm" onclick="toggleStudentArchive(${student.id}, '${escapeHTML(student.name)}', 'active')" title="Untoggle/Reactivate member and return to daily register">
+              <span>↺</span> Reactivate
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="deleteStudent(${student.id}, '${escapeHTML(student.name)}', 'archived')" title="Permanently delete member">
+              <span>🗑️</span>
+            </button>
+          ` : `
+            <button class="btn btn-outline btn-sm" onclick="toggleStudentArchive(${student.id}, '${escapeHTML(student.name)}', 'archived')" title="Archive member (removes from register, preserves details)">
+              <span>📦</span> Archive
+            </button>
+            <button class="btn btn-danger btn-sm" onclick="deleteStudent(${student.id}, '${escapeHTML(student.name)}', 'active')" title="Archive or delete member">
+              <span>🗑️</span>
+            </button>
+          `}
         </div>
       </div>
     `;
@@ -1052,7 +1099,7 @@ async function deleteStudent(id, name, status) {
     const confirmPermanent = confirm(`"${name}" is already archived.\n\nPermanently delete this member? This CANNOT be undone and will erase their attendance and payment history too.`);
     if (!confirmPermanent) return;
   } else {
-    const confirmArchive = confirm(`Are you sure you want to remove/archive "${name}"?\n\nTheir training history will be preserved.`);
+    const confirmArchive = confirm(`Are you sure you want to archive "${name}"?\n\nThey will be removed from the daily register, but all their details and training history will be preserved.`);
     if (!confirmArchive) return;
   }
 
@@ -1064,11 +1111,44 @@ async function deleteStudent(id, name, status) {
     loadDashboardStats();
     loadStudents();
     loadRegister();
+    if (typeof loadMissedAlerts === 'function') loadMissedAlerts();
   } catch (err) {
     console.error('Delete error:', err);
     showToast('Failed to remove member.', 'danger');
   }
 }
+
+async function toggleStudentArchive(id, name, targetStatus) {
+  const isArchiving = targetStatus === 'archived';
+  const actionText = isArchiving ? 'archive' : 'reactivate';
+  const confirmMsg = isArchiving
+    ? `Archive "${name}"?\n\nThey will be removed from future daily class registers, but all their training history and details will remain saved.\n\nYou can untoggle/reactivate them at any time.`
+    : `Reactivate "${name}"?\n\nThey will be returned to the active daily class register.`;
+
+  if (!confirm(confirmMsg)) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/students/${id}/status`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: targetStatus })
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.error || `Failed to ${actionText} member`);
+    }
+
+    showToast(isArchiving ? `Member "${name}" archived.` : `Member "${name}" reactivated!`, 'success');
+    loadDashboardStats();
+    loadStudents();
+    loadRegister();
+    if (typeof loadMissedAlerts === 'function') loadMissedAlerts();
+  } catch (err) {
+    console.error('Error toggling archive status:', err);
+    showToast(`Failed to ${actionText} member.`, 'danger');
+  }
+}
+window.toggleStudentArchive = toggleStudentArchive;
 
 // Student Full History Modal
 async function viewStudentHistory(studentId) {
@@ -1259,6 +1339,9 @@ async function loadMissedAlerts() {
           </a>
           <button class="btn btn-outline btn-sm" onclick="viewStudentHistory(${student.id})" style="flex: 1;">
             📜 View Log
+          </button>
+          <button class="btn btn-outline btn-sm" onclick="toggleStudentArchive(${student.id}, '${escapeHTML(student.name)}', 'archived')" style="flex: 1; color: var(--color-absent); border-color: rgba(239, 68, 68, 0.35);" title="Archive student who stopped attending">
+            📦 Archive
           </button>
         </div>
       `;

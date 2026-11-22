@@ -62,7 +62,8 @@
             </div>
           </div>
 
-          <div class="metric-chip chip-events" id="chip-upcoming-events" title="Upcoming Karate Gradings & Competitions">
+          <div class="metric-chip chip-events" id="chip-upcoming-events"
+            title="Upcoming Karate Gradings & Competitions">
             <span class="metric-icon">🏆</span>
             <div class="metric-info">
               <span class="metric-val" id="kpi-upcoming-events">0</span>
@@ -72,7 +73,8 @@
         </div>
 
         <div class="header-actions">
-          <button class="btn btn-outline" id="btn-change-password" title="Change your login password">🔑 Change Password</button>
+          <button class="btn btn-outline" id="btn-change-password" title="Change your login password">🔑 Change
+            Password</button>
           <button class="btn btn-outline" id="btn-logout" title="Log out">🔓 Log Out</button>
           <button class="btn btn-primary" id="btn-quick-add-student">
             <span class="btn-icon">+</span> Register Member
@@ -162,6 +164,7 @@
         <div class="filter-toggles">
           <label><input type="checkbox" id="reg-filter-unpaid"> Show Unpaid Only</label>
           <label><input type="checkbox" id="reg-filter-missed"> Show Missed >5 Lessons</label>
+          <label><input type="checkbox" id="reg-filter-archived"> Show Archived</label>
         </div>
       </div>
 
@@ -172,15 +175,16 @@
             <tr>
               <th>Student Member</th>
               <th>Attendance Status</th>
-              <th>This Month</th>
               <th>Class Payment</th>
+              <th>This Month</th>
               <th>Rank & Belt</th>
               <th>Association No.</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="register-tbody">
             <tr>
-              <td colspan="6" class="text-center loading-cell">Loading class register...</td>
+              <td colspan="7" class="text-center loading-cell">Loading class register...</td>
             </tr>
           </tbody>
         </table>
@@ -467,11 +471,15 @@
 
         <div class="form-row" style="align-items: center;">
           <div class="student-photo-picker">
-            <img id="student-photo-preview" class="student-avatar student-avatar-lg" src="/images/student-placeholder.svg" alt="Student photo preview">
+            <img id="student-photo-preview" class="student-avatar student-avatar-lg"
+              src="/images/student-placeholder.svg" alt="Student photo preview">
             <div class="student-photo-picker-actions">
-              <label for="student-photo-input" class="btn btn-outline btn-sm" style="cursor:pointer;">📷 Upload Photo</label>
-              <input type="file" id="student-photo-input" accept="image/png, image/jpeg, image/webp" style="display:none;">
-              <button type="button" class="btn btn-outline btn-sm" id="btn-remove-student-photo" style="display:none;">Remove</button>
+              <label for="student-photo-input" class="btn btn-outline btn-sm" style="cursor:pointer;">📷 Upload
+                Photo</label>
+              <input type="file" id="student-photo-input" accept="image/png, image/jpeg, image/webp"
+                style="display:none;">
+              <button type="button" class="btn btn-outline btn-sm" id="btn-remove-student-photo"
+                style="display:none;">Remove</button>
             </div>
           </div>
         </div>
